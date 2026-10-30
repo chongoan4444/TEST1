@@ -4,14 +4,70 @@ Cho bạn biết **mỗi tệp khách đến từ đâu** — quảng cáo, comm
 kèm **điểm ưu tiên** để biết chốt ai trước.
 
 ```
+userscripts/
+└── pancake-lead-badges.user.js   # Tampermonkey: gắn nhãn + bảng nổi ngay trên Pancake
 tools/
 ├── lead_source.py        # công cụ chính (không cần thư viện ngoài)
 ├── make_sample_data.py   # sinh HAR mẫu để xem thử giao diện
 ├── serve_reports.py      # mở báo cáo HTML bằng web server nhỏ
+├── test_userscript.js    # (JS) so classifier userscript với bản Python
+├── test_userscript_dom.js# (JS + jsdom) test gắn nhãn trên danh sách
 └── rules.example.json    # cấu hình: map tag → nguồn, từ khoá ý định, trọng số điểm
 reports/                  # báo cáo xuất ra (.html + .csv)
 demo/                     # HAR mẫu + rules mẫu
 ```
+
+## ⚡ Cách nhanh nhất: userscript Tampermonkey (phân loại ngay trên Pancake)
+
+Không cần mở từng đoạn chat. Script đọc payload `/api/v1/conversations` mà Pancake đã tải về,
+nên **hội thoại vừa hiện ra trong danh sách là có nhãn ngay**.
+
+1. Cài [Tampermonkey](https://www.tampermonkey.net/) → **Create a new script**.
+2. Dán toàn bộ nội dung `userscripts/pancake-lead-badges.user.js` → **Ctrl+S**.
+3. Mở `pancake.vn` → trang **Hội thoại (multi_pages)**.
+
+Bạn sẽ thấy:
+
+- **Bảng nổi góc phải**: tổng số tệp khách, số khách theo từng nguồn, danh sách xếp theo điểm ưu tiên
+  (`CHỐT / ưu tiên / theo dõi`). Bấm 🔍 để nhảy tới dòng đó, 📋 để copy `tên | psid | nguồn | điểm`.
+- **Nhãn nhỏ cạnh tên khách** trong danh sách: `QC 90` (quảng cáo), `BV 85` (bài viết), `LV 50` (live),
+  `TN 30` (tự nhắn), `? 20` (chưa rõ). Di chuột vào nhãn để xem **bằng chứng** đã dùng để phân loại.
+- Hội thoại mới → tự poll 20 giây/lần, có nhãn ngay, không cần F5.
+
+Cấu hình trong console (F12) — lưu vào `localStorage`, không cần sửa script:
+
+```js
+__leadSource.help()                                              // hướng dẫn
+__leadSource.set({ tagMap: { "83": { name: "Từ quảng cáo", source: "ads" } } })
+__leadSource.set({ pollMs: 10000, autoEnrich: true })            // nhanh hơn
+__leadSource.set({ showChips: true, showPanel: true, topN: 20 })
+__leadSource.leads                                               // dữ liệu đã phân loại
+```
+
+**Cơ chế lấy dữ liệu (3 lớp, tự động):**
+
+| Lớp | Việc gì | Cần bạn làm gì |
+|---|---|---|
+| 1 | Hook `fetch`/XHR, bắt mọi response `/conversations` (kể cả khi bấm phân trang) | không |
+| 2 | Tự gọi lại danh sách 20s/lần bằng đúng request app vừa dùng (giữ cookie của bạn) | không |
+| 3 | Với khách mới **hoặc** khách còn `?`, tự gọi `/conversations/<id>/messages` để xem tin nhắn → nâng độ chính xác (tối đa 3 hội thoại/vòng) | không |
+
+Vì lớp 3 chạy ngầm nên **bạn không cần mở đoạn chat nào**. Nếu API tin nhắn không cho phép
+(đổi param, chặn…), nhãn vẫn hiện theo dữ liệu danh sách và ghi chú "tin cậy thấp" — khi đó mở chat ra
+một lần là script tự bắt được và nâng độ chính xác.
+
+**Xem demo không cần Pancake:** mở `demo/mock_pancake.html` (trang mô phỏng danh sách hội thoại,
+bấm `＋ Khách mới từ quảng cáo` để thấy nhãn xuất hiện ngay).
+
+**Test tự động:**
+
+```bash
+node tools/test_userscript.js                        # classifier JS == Python (không cần cài gì)
+npm i jsdom && node tools/test_userscript_dom.js     # chạy userscript trong DOM giả: chip + bảng nổi
+```
+
+> Lưu ý: userscript chỉ **đọc** dữ liệu và vẽ badge, không sửa/gửi gì lên Pancake. Đừng hạ `pollMs`
+> xuống quá thấp để tránh bị giới hạn request.
 
 ## Chạy thử ngay với dữ liệu có sẵn
 
