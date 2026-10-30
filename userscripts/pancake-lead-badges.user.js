@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.0.0
-// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên cho các hội thoại ĐANG HIỂN THỊ trên Pancake. Alt+O bật/tắt.
+// @version      3.1.0
+// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên cho các hội thoại ĐANG HIỂN THỊ trên Pancake. Alt+O bật/tắt. Tự dò lại DOM khi Pancake đổi giao diện.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
 // @match        https://*.pancake.vn/*
@@ -30,6 +30,8 @@
     enrichSpacing: 700,     // ms giữa 2 request
     enrichTTL: 600000,      // không hỏi lại hội thoại đã hỏi trong 10 phút
     topN: 12,
+    // đổi selector khi Pancake đổi giao diện: __leadSource.set({selRow:'.abc'})
+    selList: '', selRow: '', selName: '', selSnippet: '', selTag: '',
     tagMap: {},             // {'83': {name:'Từ quảng cáo', source:'ads'}}  (tag id từ API)
     tagNameSource: {},      // {'QC': 'ads', 'live': 'live'}  (tên tag hiện trên dòng chat)
     weights: { unread: 30, recent_24h: 20, recent_3d: 10, has_phone: 15, many_msgs: 10, intent: 20, source_ads: 10, source_post: 5 },
@@ -292,9 +294,10 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const RE_LIST_GLOBAL = /\/api\/v1\/conversations(\?|$)/;
-  const RE_LIST_PAGE = /\/api\/v1\/pages\/[^/]+\/conversations(\?|$)/;
-  const RE_MESSAGES = /\/api\/v1\/(?:pages\/[^/]+\/)?conversations\/([^/?#]+)\/messages(\?|$)/;
+  const VERSION = '3.1.0';
+  const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
+  const RE_API = /\/api\/v1\//;
+  const BOOT_AT = Date.now();
 
   const state = {
     convs: new Map(),
@@ -315,8 +318,33 @@
     schedulePaint();
   }
 
-  function isListUrl(u) { return RE_LIST_GLOBAL.test(u) || RE_LIST_PAGE.test(u); }
-  function isMsgUrl(u) { return RE_MESSAGES.test(u) && !isListUrl(u); }
+  /** Có nên đọc response này không (không phụ thuộc đúng URL của Pancake). */
+  function shouldSniff(url) {
+    if (!url || !RE_API.test(url) || RE_MESSAGES_URL.test(url)) return true;
+    if (/conversation|message|tag|label/i.test(url)) return true;
+    return Date.now() - BOOT_AT < 30000;   // 30s đầu: đọc thử mọi API -> không bỏ lỡ endpoint mới
+  }
+
+  /** Đọc mọi response: nhận ra conversations hoặc messages bằng DẤU HIỆU DỮ LIỆU. */
+  function maybeIngest(url, init, json) {
+    if (!json || typeof json !== 'object') return;
+    if (Array.isArray(json.conversations) && json.conversations.length) ingestList(url, init, json);
+
+    const list = json.messages || json.data;
+    if (!Array.isArray(list)) return;
+    const m = RE_MESSAGES_URL.exec(url || '');
+    if (m && (list.length === 0 || (list[0] && typeof list[0] === 'object'))) {
+      ingestMessagesFor(decodeURIComponent(m[1]), list, url);
+      return;
+    }
+    if (!list.length || !list[0] || !list[0].conversation_id) return;
+    const byConv = {};
+    list.forEach(x => {
+      const cid = x && x.conversation_id;
+      if (cid) (byConv[cid] = byConv[cid] || []).push(x);
+    });
+    Object.keys(byConv).forEach(cid => ingestMessagesFor(cid, byConv[cid], url));
+  }
 
   function rememberListReq(url, init) {
     if (!url) return;
@@ -351,14 +379,10 @@
     schedulePaint();
   }
 
-  function ingestMessages(url, json) {
-    const m = RE_MESSAGES.exec(url || '');
-    if (!m) return;
-    const id = decodeURIComponent(m[1]);
-    const list = (json && (json.messages || json.data)) || [];
-    if (!Array.isArray(list)) return;
+  function ingestMessagesFor(id, list, url) {
+    if (!id || !Array.isArray(list)) return;
     state.msgs.set(id, list);
-    if (!state.msgUrlTpl) state.msgUrlTpl = url;
+    if (url && !state.msgUrlTpl && RE_MESSAGES_URL.test(url)) state.msgUrlTpl = url;
     state.enriching.delete(id);
     state.version++;
     scheduleDecor();
@@ -371,13 +395,11 @@
       const url = typeof input === 'string' ? input : ((input && input.url) || '');
       const p = _fetch.apply(this, arguments);
       try {
-        if (isListUrl(url) || isMsgUrl(url)) {
+        if (shouldSniff(url)) {
           p.then(res => {
             let clone;
             try { clone = res.clone(); } catch (e) { return; }
-            clone.json().then(j => {
-              if (isMsgUrl(url)) ingestMessages(url, j); else ingestList(url, init, j);
-            }).catch(() => {});
+            clone.json().then(j => maybeIngest(url, init, j)).catch(() => {});
           }).catch(() => {});
         }
       } catch (e) { /* không làm hỏng app */ }
@@ -394,12 +416,10 @@
   XMLHttpRequest.prototype.send = function (body) {
     const xhr = this;
     const url = xhr.__lsUrl || '';
-    if (isListUrl(url) || isMsgUrl(url)) {
+    if (shouldSniff(url)) {
       xhr.addEventListener('load', function () {
         try {
-          const j = JSON.parse(xhr.responseText);
-          if (isMsgUrl(url)) ingestMessages(url, j);
-          else ingestList(url, { method: 'POST', body: body }, j);
+          maybeIngest(url, { method: 'POST', body: body }, JSON.parse(xhr.responseText));
         } catch (e) { /* ignore */ }
       });
     }
@@ -479,46 +499,120 @@
   //      .snippet-wrap > .snippet-line > .snippet-text
   //      .conversation_tags_item
   // ======================================================================
-  const SEL_ROW = '.conversation-list-item';
-  const SEL_LIST = '.conversation-list';
+  const SEL_DEFAULTS = {
+    list: '.conversation-list',
+    row: '.conversation-list-item',
+    name: '.name-text, .name-module-text, [class*="name-text"], [class*="conversation-name"]',
+    snippet: '.snippet-text, [class*="snippet-text"]',
+    tag: '.conversation_tags_item, [class*="tags_item"]',
+  };
 
-  function listContainer() {
-    return document.querySelector(SEL_LIST) || document.body;
+  function selList() { return CFG.selList || SEL_DEFAULTS.list; }
+  function selRow() { return CFG.selRow || SEL_DEFAULTS.row; }
+  function selName() { return CFG.selName || SEL_DEFAULTS.name; }
+  function selSnippet() { return CFG.selSnippet || SEL_DEFAULTS.snippet; }
+  function selTag() { return CFG.selTag || SEL_DEFAULTS.tag; }
+
+  function safeQuery(sel, root) {
+    try { return (root || document).querySelectorAll(sel); } catch (e) { return []; }
   }
 
-  /** Các dòng hội thoại ĐANG HIỂN THỊ trong khung nhìn. */
-  function visibleRows() {
-    const root = listContainer();
-    const all = root.querySelectorAll(SEL_ROW);
-    const vh = window.innerHeight || 800;
-    const out = [];
-    for (let i = 0; i < all.length; i++) {
-      const el = all[i];
-      let r;
-      try { r = el.getBoundingClientRect(); } catch (e) { continue; }
-      if (r.height > 0 && r.bottom > 0 && r.top < vh) out.push(el);
+  // chẩn đoán: đang khớp được bao nhiêu dòng bằng cách nào
+  const dom = { mode: 'none', rows: 0, visible: 0, labeled: 0 };
+
+  function listContainer() {
+    const l = safeQuery(selList());
+    return l.length ? l[0] : document.body;
+  }
+
+  function convIdOf(el) {
+    const id = el && el.id;
+    if (!id) return null;
+    const m = /^(\d{5,}_\d{5,})(?:__\d+)?$/.exec(id);
+    return m ? m[1] : null;
+  }
+
+  /** Tìm dòng hội thoại: selector chuẩn → con của list → quét id toàn trang. */
+  function findRows() {
+    let rows = safeQuery(selRow());
+    if (rows.length) { dom.mode = 'selector'; return rows; }
+
+    const cont = safeQuery(selList());
+    if (cont.length) {
+      const kids = cont[0].querySelectorAll('[id]');
+      const good = [];
+      for (let i = 0; i < kids.length; i++) if (convIdOf(kids[i])) good.push(kids[i]);
+      if (good.length) { dom.mode = 'list-children'; return good; }
     }
+
+    const all = document.querySelectorAll('[id]');
+    const good = [];
+    for (let i = 0; i < all.length && good.length < 400; i++) if (convIdOf(all[i])) good.push(all[i]);
+    dom.mode = good.length ? 'id-scan' : 'none';
+    return good;
+  }
+
+  /** Chỉ các dòng ĐANG HIỂN THỊ trong khung nhìn. */
+  function visibleRows() {
+    const rows = findRows();
+    dom.rows = rows.length;
+    if (!rows.length) { dom.visible = 0; return []; }
+
+    let top = 0, bottom = window.innerHeight || 800;
+    const cont = safeQuery(selList());
+    if (cont.length) {
+      let cr; try { cr = cont[0].getBoundingClientRect(); } catch (e) { cr = null; }
+      if (cr && cr.height > 0) { top = cr.top; bottom = cr.bottom; }
+    }
+
+    const out = [];
+    let zero = 0;
+    for (let i = 0; i < rows.length; i++) {
+      let r; try { r = rows[i].getBoundingClientRect(); } catch (e) { continue; }
+      if (r.height <= 0) { zero++; continue; }
+      if (r.bottom > top && r.top < bottom) out.push(rows[i]);
+    }
+    if (!out.length && zero === rows.length) {          // layout chưa kịp tính -> lấy 40 dòng đầu
+      for (let i = 0; i < Math.min(rows.length, 40); i++) out.push(rows[i]);
+    }
+    dom.visible = out.length;
     return out;
   }
 
-  function convIdOf(row) {
-    const id = row && row.id;
-    if (!id) return null;
-    const m = /^(\d+_\d+)(?:__\d+)?$/.exec(id);
-    if (m) return m[1];
-    return /^\d+_\d+$/.test(id) ? id : null;
+  /** Tên khách trong 1 dòng: selector → fallback lá đầu tiên có chữ. */
+  function nameNode(row) {
+    if (!row) return null;
+    const n = safeQuery(selName(), row);
+    if (n.length) return n[0];
+    const leaves = row.querySelectorAll('span,div,b,strong,p,a');
+    for (let i = 0; i < leaves.length; i++) {
+      const el = leaves[i];
+      if (el.childElementCount) continue;
+      if (el.closest('.av, [class*="avatar"]')) continue;      // bỏ qua avatar
+      const t = (el.textContent || '').trim();
+      if (!t || t.length > 48) continue;
+      if (/^\d{1,2}:\d{2}$/.test(t)) continue;                 // giờ
+      if (!/[^\d\s]/.test(t)) continue;                        // số đếm chưa đọc
+      return el;
+    }
+    return null;
+  }
+
+  function rowText(row, sel) {
+    const n = safeQuery(sel, row);
+    return n.length ? (n[0].textContent || '').trim() : '';
   }
 
   function convFromRow(row, convId) {
-    const txt = sel => { const n = row.querySelector(sel); return n ? n.textContent.trim() : ''; };
     const tags = [];
-    row.querySelectorAll('.conversation_tags_item').forEach(t => tags.push(t.textContent.trim()));
-    const name = txt('.name-text') || txt('.name-module-text');
+    safeQuery(selTag(), row).forEach(t => tags.push((t.textContent || '').trim()));
+    const nn = nameNode(row);
+    const name = rowText(row, selName()) || (nn ? nn.textContent.trim() : '');
     return {
       id: convId,
       page_id: convId.split('_')[0],
       type: '',
-      snippet: txt('.snippet-text'),
+      snippet: rowText(row, selSnippet()),
       tags: [],
       domTags: tags,
       customers: [{ fb_id: convId.split('_')[1] || '', id: '', name: name }],
@@ -583,7 +677,8 @@
   function decorate() {
     if (!CFG.enabled || !CFG.showChips || document.hidden) return;
     const rows = visibleRows();
-    if (!rows.length) return;
+    dom.labeled = 0;
+    if (!rows.length) { schedulePaint(); return; }
     const now = Date.now();
     const needEnrich = [];
 
@@ -600,16 +695,17 @@
       if (pending && conv.type !== 'COMMENT') needEnrich.push(conv);
 
       let chip = chips.get(convId);
-      if (chip && chip.parentElement && row.contains(chip)) { updateChip(chip, lead, pending); return; }
+      if (chip && chip.parentElement && row.contains(chip)) { updateChip(chip, lead, pending); dom.labeled++; return; }
       if (chip) chips.delete(convId);
       chip = row.querySelector('.__ls_chip');
-      if (chip) { chips.set(convId, chip); updateChip(chip, lead, pending); return; }
+      if (chip) { chips.set(convId, chip); updateChip(chip, lead, pending); dom.labeled++; return; }
 
-      const nameEl = row.querySelector('.name-text') || row.querySelector('.name-module-text');
+      const nameEl = nameNode(row);
       if (!nameEl) return;
       const c = makeChip(lead, pending);
       try { nameEl.insertAdjacentElement('afterend', c); } catch (e) { return; }
       chips.set(convId, c);
+      dom.labeled++;
     });
 
     queueEnrich(needEnrich);
@@ -814,9 +910,12 @@
         : '<div class="empty">Chưa đọc được danh sách hội thoại.<br>Mở trang <b>Hội thoại</b> của Pancake — script tự đọc '
           + 'dữ liệu và gắn nhãn cho các dòng đang hiển thị.</div>') +
       legendHtml() +
-      '<div class="ft"><span>' + (state.lastSync ? 'đồng bộ ' + hhmm(new Date(state.lastSync).toISOString()) + ' trước' : 'chưa đồng bộ') + '</span>' +
-      '<span class="' + (state.errors.length ? 'err' : '') + '">' +
-      esc(state.errors.length ? state.errors[state.errors.length - 1].msg : (CFG.pollMs / 1000) + 's/lần') + '</span></div>';
+      '<div class="ft"><span>' + (state.lastSync ? 'đồng bộ ' + hhmm(new Date(state.lastSync).toISOString()) + ' trước' : 'chưa đồng bộ') +
+      ' · ' + dom.rows + ' dòng' + (dom.mode !== 'selector' && dom.mode !== 'none' ? ' (' + dom.mode + ')' : '') + '</span>' +
+      '<span class="' + (state.errors.length || (dom.rows && !dom.labeled) ? 'err' : '') + '">' +
+      esc(state.errors.length ? state.errors[state.errors.length - 1].msg
+        : (dom.rows && !dom.labeled ? 'không gắn được nhãn → __leadSource.debug()'
+          : (dom.rows ? dom.labeled + ' nhãn / ' + dom.visible + ' đang hiện' : 'chưa thấy dòng hội thoại'))) + '</span></div>';
 
     if (wasCollapsed) wrap.classList.add('collapsed');
     const newList = shadow.querySelector('.list');
@@ -1010,6 +1109,34 @@
       else { paint(true); scheduleDecor(true); }
       return CFG;
     },
+    debug: function () {
+      const rows = findRows();
+      const vis = visibleRows();
+      const sample = vis[0] || rows[0] || null;
+      const rep = {
+        version: VERSION,
+        url: location.href,
+        enabled: CFG.enabled,
+        showPanel: CFG.showPanel,
+        showChips: CFG.showChips,
+        convs: state.convs.size,
+        msgs: state.msgs.size,
+        listRequests: state.listReqs.length,
+        domMode: dom.mode,
+        rowsFound: rows.length,
+        rowsVisible: vis.length,
+        rowsWithChip: document.querySelectorAll('.__ls_chip').length,
+        selectors: { list: selList(), row: selRow(), name: selName() },
+        sampleRowHtml: sample ? String(sample.outerHTML).slice(0, 800) : null,
+        errors: state.errors.map(e => e.msg),
+      };
+      console.log('%c[lead-source] chẩn đoán', 'color:#7c3aed;font-weight:700', rep);
+      try {
+        navigator.clipboard.writeText(JSON.stringify(rep, null, 2));
+        LOG('đã copy báo cáo chẩn đoán — dán cho dev là biết sửa gì');
+      } catch (e) { /* ignore */ }
+      return rep;
+    },
     help: function () {
       LOG('Alt+O  = ẩn/hiện tất cả · ▭ = chỉ ẩn bảng · 🏷️/▤ = mở lại' +
         '\nChỉ xem tin nhắn của dòng đang hiển thị:  __leadSource.set({enrichVisible: false}) để tắt' +
@@ -1019,5 +1146,8 @@
     },
   };
 
-  LOG('v3 đã bật · Alt+O ẩn/hiện · chỉ xử lý các dòng đang hiển thị · __leadSource.help()');
+  if (!CFG.enabled) {
+    LOG('đang ở trạng thái ĐÃ ẨN (lưu từ lần trước). Bấm nút 🏷️ góc phải hoặc Alt+O để bật lại.');
+  }
+  LOG('v' + VERSION + ' đã bật · Alt+O ẩn/hiện · chỉ xử lý dòng đang hiển thị · __leadSource.debug() để chẩn đoán');
 })();

@@ -13,6 +13,7 @@ tools/
 ├── test_userscript.js    # (JS) so classifier userscript với bản Python
 ├── test_userscript_dom.js# (JS + jsdom) test nhãn / Alt+O / chỉ dòng hiển thị
 ├── test_userscript_real.js# (JS) test classifier trên dữ liệu THẬT
+├── test_userscript_selectors.js # (JS + jsdom) test khi Pancake đổi tên class
 ├── build_real_fixture.py # rút dữ liệu thật từ HAR -> demo/real_leads.json
 └── rules.example.json    # cấu hình: map tag → nguồn, từ khoá ý định, trọng số điểm
 reports/                  # báo cáo xuất ra (.html + .csv)
@@ -69,6 +70,32 @@ __leadSource.set({ enrichLimit: 8, pollMs: 30000, scanMs: 2000 })
 __leadSource.set({ enabled: false })              // như Alt+O
 __leadSource.visibleRows                          // id các hội thoại đang hiển thị
 __leadSource.help()
+```
+
+### 🚑 Không thấy nhãn / danh sách không cập nhật?
+
+Pancake đổi giao diện là chuyện bình thường — bản 3.1 tự dò lại DOM (3 lớp: selector chuẩn →
+con của `.conversation-list` → quét mọi phần tử có `id` dạng `<page>_<psid>`), và đọc dữ liệu theo
+**dấu hiệu dữ liệu** (`json.conversations`, `messages[].conversation_id`) chứ không phụ thuộc URL.
+
+Kiểm tra theo thứ tự:
+
+```js
+__leadSource.debug()      // in + copy báo cáo chẩn đoán (gửi mình là biết sửa gì)
+```
+
+| Trong báo cáo | Nghĩa | Cách xử lý |
+|---|---|---|
+| `enabled: false` | bạn đã ẩn bằng Alt+O/✕ ở lần trước | bấm nút 🏷️ góc phải hoặc `__leadSource.show()` |
+| `convs: 0` | chưa bắt được danh sách hội thoại | F5 lại trang Hội thoại; nếu vẫn 0, gửi mình `debug()` |
+| `domMode: "none"`, `rowsFound: 0` | DOM đổi cấu trúc, không tìm ra dòng | gửi mình `sampleRowHtml` trong báo cáo |
+| `rowsFound > 0`, `rowsWithChip: 0` | tìm ra dòng nhưng không thấy tên để gắn nhãn | gửi mình `sampleRowHtml` |
+| `domMode: "id-scan"` | đang chạy chế độ dự phòng (vẫn đúng) | không cần làm gì |
+
+Có thể chỉ định selector trực tiếp nếu biết:
+
+```js
+__leadSource.set({ selRow: '.ten-class-dong-moi', selName: '.ten-class-ten-khach' })
 ```
 
 ## 🧪 Dữ liệu thật nói gì (đọc từ `loaddanhsach.har` + `batmesss.har`)
