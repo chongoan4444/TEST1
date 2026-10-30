@@ -1,0 +1,2337 @@
+{
+ "note": "Dữ liệu thật đã ẩn danh, rút từ loaddanhsach.har + batmesss.har",
+ "cases": [
+  {
+   "expected": "ads",
+   "conv": {
+    "id": "694078980461601_28716547411307695",
+    "type": "INBOX",
+    "tags": [
+     93,
+     136,
+     306
+    ],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 8,
+    "page_id": "694078980461601",
+    "updated_at": "2026-10-23T04:42:18.598000",
+    "last_customer_interactive_at": "2026-10-23T04:06:37",
+    "snippet": "Chị ơi ❤️\t\t\t\t\t\t\t\t\t\t\t\r\nhôm nay shop đang có chương trình MIỄN SH...",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 01"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-01",
+      "name": "Khách 01"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "ad-2871654741130769512025231135147002817927136.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:06:32.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252311351470028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_4mMof5_hOpLsmUaqTakckn_FRhYr4tF143HZfouXUdpHa4zNm2w0Nrra4vVpokOop_wbiUG0q8YD07hWF1rnRQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:06:35.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hà Thị Nhàn đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FS_6NvJhvJVxa9kKAUXb2n_FRhYr4tF143HZfouXUdqnuqhk4NOidpF3hyryquVn97svofIIbXSuWBsetALC3A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:06:36.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Hà Thị Nhàn ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_9Snq1RiH2Rw98EjDUgmBzH_FRhYr4tF143HZfouXUdq6Ncqxbn_U27mkzp_I_WZwWCElZ0bLPIr27zEKGmf1pA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:06:37.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_Dhr_fwE_s8PYyNMw2ql203_FRhYr4tF143HZfouXUdrr2vZwW5M5wxsiOB_fmhMp4_uDP9ankzm4mpypakFS6g",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:06:52.807000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/ee841dadc7a0bee3a1ada72c5c35da029a88492b.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/3c4447445a25e76fb90e47322579f865096b8331.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/284a768741bbe3ba3292101d2a6915d7e9884b81.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/b2473cd7d3eb0f94dc6fb74b6a0f5189a911c1aa.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/15ce7afced9065d00ed3c7ced0b7bac110f15531.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_NlJ5hqelNje14wKKLh70F3_FRhYr4tF143HZfouXUdqf7_FNKJdIL2rsQDdoPditm-2RQZwzu25uu8Njmj2mjg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:06:53.300000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 149k,  2 áo 199k, 3 áo 279k)❤️\r<br key",
+     "attachments": []
+    },
+    {
+     "id": "m_pYItkB5-viq9r_3OJXJfxX_FRhYr4tF143HZfouXUdrrwFhjlN1rrf5c-SyhHdeu08aZbr1U9_w4eTsDyhBcFg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:06:55.160000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chị cho e xin chiều cao + cân nặng shop chọn size phù hợp cho mìn",
+     "attachments": []
+    },
+    {
+     "id": "m_ss-ExAmYYl01adzR0b3E-X_FRhYr4tF143HZfouXUdqnSDNZSQdaDUYkK82asEDqz311Q-Rfdlch7OlOXNPYeg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:10:45.896000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Trước khi nhận hàng chị được kiểm tra hàng nha ạ, không đúng nhữn",
+     "attachments": []
+    },
+    {
+     "id": "m_7Dva2EjwUj8UJIUVat4jqH_FRhYr4tF143HZfouXUdrx7KJfnoP_u2a8850FYp-MfJ4ZjhwGIo8Ob4LU3ZFwiA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-23T04:42:18.598000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chị ơi ❤️\t\t\t\t\t\t\t\t\t\t\t\r<br key='n_0' />hôm nay shop đang có chương ",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "ads",
+   "conv": {
+    "id": "769625892902516_39224298167184827",
+    "type": "INBOX",
+    "tags": [
+     9,
+     284,
+     346
+    ],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 4,
+    "page_id": "769625892902516",
+    "updated_at": "2026-10-19T10:10:29.566000",
+    "last_customer_interactive_at": "2026-10-19T10:10:19",
+    "snippet": "Chị cho em xin chiều cao + cân nặng em chọn size phù hợp cho ...",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 02"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-02",
+      "name": "Khách 02"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "ad-3922429816718482712025131225833012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251312258330128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_G1FmYDTYUK6P7EkZitsM2QRAfvx_K2MqnLac0KdVp7ZSejthjYIR8cuJg_MNF89aAEv3n5p15PB75BMJ5ohKnQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-3922429816718482712025131225833012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251312258330128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_G1FmYDTYUK6P7EkZitsM2QRAfvx_K2MqnLac0KdVp7ZSejthjYIR8cuJg_MNF89aAEv3n5p15PB75BMJ5ohKnQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_iZsc-dimPMuYRJKYBME7DwRAfvx_K2MqnLac0KdVp7bPe5CYdR511AkJnQm-pEtDPUVzyPzSJONB-9mQjnw77g",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:26.960000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/22/8b61f02cf8c78b88afd25f28e469a6a3a0d27d66.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "ad-3922429816718482712025131225833012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251312258330128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_G1FmYDTYUK6P7EkZitsM2QRAfvx_K2MqnLac0KdVp7ZSejthjYIR8cuJg_MNF89aAEv3n5p15PB75BMJ5ohKnQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_iZsc-dimPMuYRJKYBME7DwRAfvx_K2MqnLac0KdVp7bPe5CYdR511AkJnQm-pEtDPUVzyPzSJONB-9mQjnw77g",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:26.960000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/22/8b61f02cf8c78b88afd25f28e469a6a3a0d27d66.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_v8HeldQkOy5A01gd7rmS5gRAfvx_K2MqnLac0KdVp7ZaN8Gv7NAACrXOuUDJ2U969259AB2mBPBJvnZbb_XehA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:27.547000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 169k,  2 áo 249k, 3 áo 349k)❤️\r<br key",
+     "attachments": []
+    },
+    {
+     "id": "ad-3922429816718482712025131225833012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251312258330128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_G1FmYDTYUK6P7EkZitsM2QRAfvx_K2MqnLac0KdVp7ZSejthjYIR8cuJg_MNF89aAEv3n5p15PB75BMJ5ohKnQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_iZsc-dimPMuYRJKYBME7DwRAfvx_K2MqnLac0KdVp7bPe5CYdR511AkJnQm-pEtDPUVzyPzSJONB-9mQjnw77g",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:26.960000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/22/8b61f02cf8c78b88afd25f28e469a6a3a0d27d66.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_v8HeldQkOy5A01gd7rmS5gRAfvx_K2MqnLac0KdVp7ZaN8Gv7NAACrXOuUDJ2U969259AB2mBPBJvnZbb_XehA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:27.547000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 169k,  2 áo 249k, 3 áo 349k)❤️\r<br key",
+     "attachments": []
+    },
+    {
+     "id": "m_odYhlq7wSiF_5WLoUH1pQARAfvx_K2MqnLac0KdVp7YJT1_AmWz-5stuAOlwu0zYIVGFX_dhxIs4pzaF_b7EfA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:29.566000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chị cho em xin chiều cao + cân nặng em chọn size phù hợp cho mình",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "post",
+   "conv": {
+    "id": "122203568066953890_4513146688944224",
+    "type": "COMMENT",
+    "tags": [],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 2,
+    "page_id": "689375157595846",
+    "updated_at": "2026-10-19T10:11:07.000000",
+    "last_customer_interactive_at": null,
+    "snippet": "Dạ chào chị Thao Quyên  , shop đã nhắn tin cho mình rồi đó ạ....",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 03"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-03",
+      "name": "Khách 03"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "122203568066953890_4513146688944224",
+     "type": "COMMENT",
+     "inserted_at": "2026-10-19T10:10:54.000000",
+     "parent_id": "122203568066953890_4513146688944224",
+     "comment_count": null,
+     "like_count": 0,
+     "message": "<div>Bao nhiêu sop</div>",
+     "attachments": []
+    },
+    {
+     "id": "122203568066953890_4513146688944224",
+     "type": "COMMENT",
+     "inserted_at": "2026-10-19T10:10:54.000000",
+     "parent_id": "122203568066953890_4513146688944224",
+     "comment_count": null,
+     "like_count": 0,
+     "message": "<div>Bao nhiêu sop</div>",
+     "attachments": []
+    },
+    {
+     "id": "122203568066953890_1659474325533562",
+     "type": "COMMENT",
+     "inserted_at": "2026-10-19T10:11:07.000000",
+     "parent_id": "122203568066953890_4513146688944224",
+     "comment_count": null,
+     "like_count": 0,
+     "message": "<div>Dạ chào chị Thao Quyên  , shop đã nhắn tin cho mình rồi đó ạ. Chị",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "organic",
+   "conv": {
+    "id": "689375157595846_29617688761165549",
+    "type": "INBOX",
+    "tags": [
+     1,
+     293,
+     415
+    ],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 5,
+    "page_id": "689375157595846",
+    "updated_at": "2026-10-19T10:11:20.000000",
+    "last_customer_interactive_at": null,
+    "snippet": "Chị cho em xin chiều cao + cân nặng em chọn size phù hợp cho ...",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 04"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-04",
+      "name": "Khách 04"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "m_afVZAE4h0_FpKkT_ZEqY3uZ0E6-x09YVQKBEjvEMAWqdg6-aEKxwjEsyB-7qEEhJNK30OuWHdNtddyFiWWopJg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:07.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Bạn đang phản hồi bình luận của người dùng về bài viết trên Trang",
+     "attachments": []
+    },
+    {
+     "id": "m_aT1Gz2jinPtivr9SwIq-9uZ0E6-x09YVQKBEjvEMAWrJK_MeXurSL3McfgDmu1dEcc7NQG76_eIpnUrXeuYB7g",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:08.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Em chào chị ạ !!!</div>",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "ads",
+   "conv": {
+    "id": "694078980461601_39242773345368119",
+    "type": "INBOX",
+    "tags": [
+     93,
+     103,
+     302
+    ],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 10,
+    "page_id": "694078980461601",
+    "updated_at": "2026-10-19T10:11:22.591000",
+    "last_customer_interactive_at": "2026-10-19T10:10:48",
+    "snippet": "Chị cho e xin chiều cao + cân nặng shop chọn size phù hợp cho...",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 05"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-05",
+      "name": "Khách 05"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "ad-3924277334536811912025227464612002817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:44.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252274646120028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_EJObnUiel0KklfPA639IaZbL-R78U90u_30k_u0kIwtkDYE6LWdyaCDq0HQ8_Kd9Lkum25Rg-Yx3mnnpfvNypA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_fJpFUTYqLYwYE7nmy3jZzZbL-R78U90u_30k_u0kIwsSgj-zt8FwwgUwTmC7TmFC5VpmYyL0OwidtDWHMNV79w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chất liệu vải sản phẩm ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FJ9fy6t8k_hAhBy7yw8az5bL-R78U90u_30k_u0kIwte4MDIlQfwoP7k6OeuFMF8g0B38uZIbPF1EHEke2fIQQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_gohxxfjWx26_niK9TVhRkZbL-R78U90u_30k_u0kIwtMYfSSlbdpzyjYU2sov_PM5r1PXwouJRjG_R4b1dqoaw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_PG00T5HG1eW5AzUuTIRwnJbL-R78U90u_30k_u0kIwtfjAnv2jIgOElS555fBMFjBGyoUvHGuJ0FSrwQq8cQhQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_SwmQdoo2peXIHbgKyKr3qpbL-R78U90u_30k_u0kIwtaWsycKpZAxlTs5A2Sb-Hgaj16JqPfEI79ISeYcQp2SA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lYmINSVKXS_O5nuIRPJv7pbL-R78U90u_30k_u0kIwvx9HxtsqlOfOHd3Nmd5-PNCmCQEJFdYSr9Mh8zl3xp6A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:48.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Có được kiểm tra hàng không ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-3924277334536811912025227464612002817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:44.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252274646120028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_EJObnUiel0KklfPA639IaZbL-R78U90u_30k_u0kIwtkDYE6LWdyaCDq0HQ8_Kd9Lkum25Rg-Yx3mnnpfvNypA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_fJpFUTYqLYwYE7nmy3jZzZbL-R78U90u_30k_u0kIwsSgj-zt8FwwgUwTmC7TmFC5VpmYyL0OwidtDWHMNV79w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chất liệu vải sản phẩm ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FJ9fy6t8k_hAhBy7yw8az5bL-R78U90u_30k_u0kIwte4MDIlQfwoP7k6OeuFMF8g0B38uZIbPF1EHEke2fIQQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_gohxxfjWx26_niK9TVhRkZbL-R78U90u_30k_u0kIwtMYfSSlbdpzyjYU2sov_PM5r1PXwouJRjG_R4b1dqoaw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_PG00T5HG1eW5AzUuTIRwnJbL-R78U90u_30k_u0kIwtfjAnv2jIgOElS555fBMFjBGyoUvHGuJ0FSrwQq8cQhQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_SwmQdoo2peXIHbgKyKr3qpbL-R78U90u_30k_u0kIwtaWsycKpZAxlTs5A2Sb-Hgaj16JqPfEI79ISeYcQp2SA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lYmINSVKXS_O5nuIRPJv7pbL-R78U90u_30k_u0kIwvx9HxtsqlOfOHd3Nmd5-PNCmCQEJFdYSr9Mh8zl3xp6A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:48.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Có được kiểm tra hàng không ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-3924277334536811912025227464612002817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:44.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252274646120028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_EJObnUiel0KklfPA639IaZbL-R78U90u_30k_u0kIwtkDYE6LWdyaCDq0HQ8_Kd9Lkum25Rg-Yx3mnnpfvNypA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_fJpFUTYqLYwYE7nmy3jZzZbL-R78U90u_30k_u0kIwsSgj-zt8FwwgUwTmC7TmFC5VpmYyL0OwidtDWHMNV79w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chất liệu vải sản phẩm ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FJ9fy6t8k_hAhBy7yw8az5bL-R78U90u_30k_u0kIwte4MDIlQfwoP7k6OeuFMF8g0B38uZIbPF1EHEke2fIQQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_gohxxfjWx26_niK9TVhRkZbL-R78U90u_30k_u0kIwtMYfSSlbdpzyjYU2sov_PM5r1PXwouJRjG_R4b1dqoaw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_PG00T5HG1eW5AzUuTIRwnJbL-R78U90u_30k_u0kIwtfjAnv2jIgOElS555fBMFjBGyoUvHGuJ0FSrwQq8cQhQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_SwmQdoo2peXIHbgKyKr3qpbL-R78U90u_30k_u0kIwtaWsycKpZAxlTs5A2Sb-Hgaj16JqPfEI79ISeYcQp2SA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lYmINSVKXS_O5nuIRPJv7pbL-R78U90u_30k_u0kIwvx9HxtsqlOfOHd3Nmd5-PNCmCQEJFdYSr9Mh8zl3xp6A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:48.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Có được kiểm tra hàng không ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-3924277334536811912025227464612002817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:44.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252274646120028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_EJObnUiel0KklfPA639IaZbL-R78U90u_30k_u0kIwtkDYE6LWdyaCDq0HQ8_Kd9Lkum25Rg-Yx3mnnpfvNypA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_fJpFUTYqLYwYE7nmy3jZzZbL-R78U90u_30k_u0kIwsSgj-zt8FwwgUwTmC7TmFC5VpmYyL0OwidtDWHMNV79w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chất liệu vải sản phẩm ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FJ9fy6t8k_hAhBy7yw8az5bL-R78U90u_30k_u0kIwte4MDIlQfwoP7k6OeuFMF8g0B38uZIbPF1EHEke2fIQQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_gohxxfjWx26_niK9TVhRkZbL-R78U90u_30k_u0kIwtMYfSSlbdpzyjYU2sov_PM5r1PXwouJRjG_R4b1dqoaw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_PG00T5HG1eW5AzUuTIRwnJbL-R78U90u_30k_u0kIwtfjAnv2jIgOElS555fBMFjBGyoUvHGuJ0FSrwQq8cQhQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_SwmQdoo2peXIHbgKyKr3qpbL-R78U90u_30k_u0kIwtaWsycKpZAxlTs5A2Sb-Hgaj16JqPfEI79ISeYcQp2SA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lYmINSVKXS_O5nuIRPJv7pbL-R78U90u_30k_u0kIwvx9HxtsqlOfOHd3Nmd5-PNCmCQEJFdYSr9Mh8zl3xp6A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:48.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Có được kiểm tra hàng không ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-3924277334536811912025227464612002817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:44.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252274646120028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_EJObnUiel0KklfPA639IaZbL-R78U90u_30k_u0kIwtkDYE6LWdyaCDq0HQ8_Kd9Lkum25Rg-Yx3mnnpfvNypA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_fJpFUTYqLYwYE7nmy3jZzZbL-R78U90u_30k_u0kIwsSgj-zt8FwwgUwTmC7TmFC5VpmYyL0OwidtDWHMNV79w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chất liệu vải sản phẩm ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FJ9fy6t8k_hAhBy7yw8az5bL-R78U90u_30k_u0kIwte4MDIlQfwoP7k6OeuFMF8g0B38uZIbPF1EHEke2fIQQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_gohxxfjWx26_niK9TVhRkZbL-R78U90u_30k_u0kIwtMYfSSlbdpzyjYU2sov_PM5r1PXwouJRjG_R4b1dqoaw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_PG00T5HG1eW5AzUuTIRwnJbL-R78U90u_30k_u0kIwtfjAnv2jIgOElS555fBMFjBGyoUvHGuJ0FSrwQq8cQhQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_SwmQdoo2peXIHbgKyKr3qpbL-R78U90u_30k_u0kIwtaWsycKpZAxlTs5A2Sb-Hgaj16JqPfEI79ISeYcQp2SA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lYmINSVKXS_O5nuIRPJv7pbL-R78U90u_30k_u0kIwvx9HxtsqlOfOHd3Nmd5-PNCmCQEJFdYSr9Mh8zl3xp6A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:48.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Có được kiểm tra hàng không ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_YBwKJRWOTNJ_X36VMJM7NZbL-R78U90u_30k_u0kIwuEIU570wpEPj1B_k0FfWf3hnZUXDw6HPP1ucqDRG6JEA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.202000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/ee841dadc7a0bee3a1ada72c5c35da029a88492b.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/3c4447445a25e76fb90e47322579f865096b8331.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/284a768741bbe3ba3292101d2a6915d7e9884b81.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/b2473cd7d3eb0f94dc6fb74b6a0f5189a911c1aa.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/15ce7afced9065d00ed3c7ced0b7bac110f15531.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "ad-3924277334536811912025227464612002817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:44.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252274646120028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_EJObnUiel0KklfPA639IaZbL-R78U90u_30k_u0kIwtkDYE6LWdyaCDq0HQ8_Kd9Lkum25Rg-Yx3mnnpfvNypA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_fJpFUTYqLYwYE7nmy3jZzZbL-R78U90u_30k_u0kIwsSgj-zt8FwwgUwTmC7TmFC5VpmYyL0OwidtDWHMNV79w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chất liệu vải sản phẩm ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FJ9fy6t8k_hAhBy7yw8az5bL-R78U90u_30k_u0kIwte4MDIlQfwoP7k6OeuFMF8g0B38uZIbPF1EHEke2fIQQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_gohxxfjWx26_niK9TVhRkZbL-R78U90u_30k_u0kIwtMYfSSlbdpzyjYU2sov_PM5r1PXwouJRjG_R4b1dqoaw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_PG00T5HG1eW5AzUuTIRwnJbL-R78U90u_30k_u0kIwtfjAnv2jIgOElS555fBMFjBGyoUvHGuJ0FSrwQq8cQhQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_SwmQdoo2peXIHbgKyKr3qpbL-R78U90u_30k_u0kIwtaWsycKpZAxlTs5A2Sb-Hgaj16JqPfEI79ISeYcQp2SA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lYmINSVKXS_O5nuIRPJv7pbL-R78U90u_30k_u0kIwvx9HxtsqlOfOHd3Nmd5-PNCmCQEJFdYSr9Mh8zl3xp6A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:48.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Có được kiểm tra hàng không ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_YBwKJRWOTNJ_X36VMJM7NZbL-R78U90u_30k_u0kIwuEIU570wpEPj1B_k0FfWf3hnZUXDw6HPP1ucqDRG6JEA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.202000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/ee841dadc7a0bee3a1ada72c5c35da029a88492b.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/3c4447445a25e76fb90e47322579f865096b8331.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/284a768741bbe3ba3292101d2a6915d7e9884b81.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/b2473cd7d3eb0f94dc6fb74b6a0f5189a911c1aa.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/15ce7afced9065d00ed3c7ced0b7bac110f15531.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_fQUTT_HXN7NkbH223e_RPJbL-R78U90u_30k_u0kIwuy4NTXQwsFYWPPerRrU5XE0QippIW9s7Vghi-5mce3Yw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.792000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 149k,  2 áo 199k, 3 áo 279k)❤️\r<br key",
+     "attachments": []
+    },
+    {
+     "id": "ad-3924277334536811912025227464612002817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:44.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120252274646120028",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122178739184959361",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_EJObnUiel0KklfPA639IaZbL-R78U90u_30k_u0kIwtkDYE6LWdyaCDq0HQ8_Kd9Lkum25Rg-Yx3mnnpfvNypA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_fJpFUTYqLYwYE7nmy3jZzZbL-R78U90u_30k_u0kIwsSgj-zt8FwwgUwTmC7TmFC5VpmYyL0OwidtDWHMNV79w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:46.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chất liệu vải sản phẩm ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_FJ9fy6t8k_hAhBy7yw8az5bL-R78U90u_30k_u0kIwte4MDIlQfwoP7k6OeuFMF8g0B38uZIbPF1EHEke2fIQQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_gohxxfjWx26_niK9TVhRkZbL-R78U90u_30k_u0kIwtMYfSSlbdpzyjYU2sov_PM5r1PXwouJRjG_R4b1dqoaw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Ngọc Liên ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_PG00T5HG1eW5AzUuTIRwnJbL-R78U90u_30k_u0kIwtfjAnv2jIgOElS555fBMFjBGyoUvHGuJ0FSrwQq8cQhQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_SwmQdoo2peXIHbgKyKr3qpbL-R78U90u_30k_u0kIwtaWsycKpZAxlTs5A2Sb-Hgaj16JqPfEI79ISeYcQp2SA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:47.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Ngọc Liên đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lYmINSVKXS_O5nuIRPJv7pbL-R78U90u_30k_u0kIwvx9HxtsqlOfOHd3Nmd5-PNCmCQEJFdYSr9Mh8zl3xp6A",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:10:48.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Có được kiểm tra hàng không ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_YBwKJRWOTNJ_X36VMJM7NZbL-R78U90u_30k_u0kIwuEIU570wpEPj1B_k0FfWf3hnZUXDw6HPP1ucqDRG6JEA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.202000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/ee841dadc7a0bee3a1ada72c5c35da029a88492b.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/3c4447445a25e76fb90e47322579f865096b8331.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/284a768741bbe3ba3292101d2a6915d7e9884b81.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/b2473cd7d3eb0f94dc6fb74b6a0f5189a911c1aa.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/10/15ce7afced9065d00ed3c7ced0b7bac110f15531.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_fQUTT_HXN7NkbH223e_RPJbL-R78U90u_30k_u0kIwuy4NTXQwsFYWPPerRrU5XE0QippIW9s7Vghi-5mce3Yw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.792000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 149k,  2 áo 199k, 3 áo 279k)❤️\r<br key",
+     "attachments": []
+    },
+    {
+     "id": "m_ZuCdxwrSZSbmL7m1UEAII5bL-R78U90u_30k_u0kIwvIriWNej66Y_PBGJmO5_8EETSiQxw_hv-204sl5LJl5w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:22.591000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chị cho e xin chiều cao + cân nặng shop chọn size phù hợp cho mìn",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "ads",
+   "conv": {
+    "id": "769625892902516_39901805309432673",
+    "type": "INBOX",
+    "tags": [
+     9,
+     284,
+     346
+    ],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 6,
+    "page_id": "769625892902516",
+    "updated_at": "2026-10-19T10:11:35.550000",
+    "last_customer_interactive_at": "2026-10-19T10:11:23",
+    "snippet": "Chị cho em xin chiều cao + cân nặng em chọn size phù hợp cho ...",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 06"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-06",
+      "name": "Khách 06"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "ad-3990180530943267312025134862849012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251348628490128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_PRH3itjRCpzECpptkZwGSjZAL2rY5uzyHPFINJJoT95lHHDgJeXyhTXhdFv3HKAp0W9vgQfi539hMbfCrsYdsQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:22.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hien Luu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_isaoXFo6FIe7cdd0_STqATZAL2rY5uzyHPFINJJoT96AQ7ga5eg2BzL77crARgulcyqLtc1jrQqLRHd3hoRaEg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lGfVkYJ-Y4PWIpm6KtwnyTZAL2rY5uzyHPFINJJoT96PnIJ36fjPIeyFaKMgtMCW0Xfv3TmBKLt__YjB5thCxA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào Hien Luu ! Chúng tôi có thể giúp gì cho bạn?</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-3990180530943267312025134862849012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251348628490128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_PRH3itjRCpzECpptkZwGSjZAL2rY5uzyHPFINJJoT95lHHDgJeXyhTXhdFv3HKAp0W9vgQfi539hMbfCrsYdsQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:22.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hien Luu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_isaoXFo6FIe7cdd0_STqATZAL2rY5uzyHPFINJJoT96AQ7ga5eg2BzL77crARgulcyqLtc1jrQqLRHd3hoRaEg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lGfVkYJ-Y4PWIpm6KtwnyTZAL2rY5uzyHPFINJJoT96PnIJ36fjPIeyFaKMgtMCW0Xfv3TmBKLt__YjB5thCxA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào Hien Luu ! Chúng tôi có thể giúp gì cho bạn?</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-3990180530943267312025134862849012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251348628490128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_PRH3itjRCpzECpptkZwGSjZAL2rY5uzyHPFINJJoT95lHHDgJeXyhTXhdFv3HKAp0W9vgQfi539hMbfCrsYdsQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:22.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hien Luu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_isaoXFo6FIe7cdd0_STqATZAL2rY5uzyHPFINJJoT96AQ7ga5eg2BzL77crARgulcyqLtc1jrQqLRHd3hoRaEg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lGfVkYJ-Y4PWIpm6KtwnyTZAL2rY5uzyHPFINJJoT96PnIJ36fjPIeyFaKMgtMCW0Xfv3TmBKLt__YjB5thCxA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào Hien Luu ! Chúng tôi có thể giúp gì cho bạn?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_kZczz2bYyvZWf7KrUJa7YDZAL2rY5uzyHPFINJJoT94H9lfa48EA0rkXBdxnVc2uPYj55_-Fl3lYvMc525--cg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:32.494000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/22/8b61f02cf8c78b88afd25f28e469a6a3a0d27d66.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "ad-3990180530943267312025134862849012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251348628490128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_PRH3itjRCpzECpptkZwGSjZAL2rY5uzyHPFINJJoT95lHHDgJeXyhTXhdFv3HKAp0W9vgQfi539hMbfCrsYdsQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:22.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hien Luu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_isaoXFo6FIe7cdd0_STqATZAL2rY5uzyHPFINJJoT96AQ7ga5eg2BzL77crARgulcyqLtc1jrQqLRHd3hoRaEg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lGfVkYJ-Y4PWIpm6KtwnyTZAL2rY5uzyHPFINJJoT96PnIJ36fjPIeyFaKMgtMCW0Xfv3TmBKLt__YjB5thCxA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào Hien Luu ! Chúng tôi có thể giúp gì cho bạn?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_kZczz2bYyvZWf7KrUJa7YDZAL2rY5uzyHPFINJJoT94H9lfa48EA0rkXBdxnVc2uPYj55_-Fl3lYvMc525--cg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:32.494000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/22/8b61f02cf8c78b88afd25f28e469a6a3a0d27d66.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_r64Nm3IPOojqEanfTbrYyTZAL2rY5uzyHPFINJJoT96KjLKna-HgAzySHLHql5urzZZ-cNJ9gybBE1WXMbzirg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:33.624000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 169k,  2 áo 249k, 3 áo 349k)❤️\r<br key",
+     "attachments": []
+    },
+    {
+     "id": "ad-3990180530943267312025134862849012817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:19.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120251348628490128",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122166023078991498",
+       "post_title": "\"#ÁO siêu xinh siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm giống như h"
+      }
+     ]
+    },
+    {
+     "id": "m_PRH3itjRCpzECpptkZwGSjZAL2rY5uzyHPFINJJoT95lHHDgJeXyhTXhdFv3HKAp0W9vgQfi539hMbfCrsYdsQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:22.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hien Luu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_isaoXFo6FIe7cdd0_STqATZAL2rY5uzyHPFINJJoT96AQ7ga5eg2BzL77crARgulcyqLtc1jrQqLRHd3hoRaEg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Giá sản phẩm là bao nhiêu?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_lGfVkYJ-Y4PWIpm6KtwnyTZAL2rY5uzyHPFINJJoT96PnIJ36fjPIeyFaKMgtMCW0Xfv3TmBKLt__YjB5thCxA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:23.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào Hien Luu ! Chúng tôi có thể giúp gì cho bạn?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_kZczz2bYyvZWf7KrUJa7YDZAL2rY5uzyHPFINJJoT94H9lfa48EA0rkXBdxnVc2uPYj55_-Fl3lYvMc525--cg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:32.494000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2609/2026/9/22/8b61f02cf8c78b88afd25f28e469a6a3a0d27d66.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_r64Nm3IPOojqEanfTbrYyTZAL2rY5uzyHPFINJJoT96KjLKna-HgAzySHLHql5urzZZ-cNJ9gybBE1WXMbzirg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:33.624000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 169k,  2 áo 249k, 3 áo 349k)❤️\r<br key",
+     "attachments": []
+    },
+    {
+     "id": "m_xtK7yVAbLwVVEzJzC3m2ETZAL2rY5uzyHPFINJJoT964lHOESpZbsTO3D3j9w4QYMH0yoyu4vZDTUcu9DTtw5w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:35.550000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chị cho em xin chiều cao + cân nặng em chọn size phù hợp cho mình",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "post",
+   "conv": {
+    "id": "122141383767055504_2366976067382429",
+    "type": "COMMENT",
+    "tags": [],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 2,
+    "page_id": "834072796450267",
+    "updated_at": "2026-10-19T10:11:51.000000",
+    "last_customer_interactive_at": null,
+    "snippet": "Dạ chào chị Nguyễn Sau  , shop đã nhắn tin cho mình rồi đó ạ....",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 07"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-07",
+      "name": "Khách 07"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "122141383767055504_2366976067382429",
+     "type": "COMMENT",
+     "inserted_at": "2026-10-19T10:11:37.000000",
+     "parent_id": "122141383767055504_2366976067382429",
+     "comment_count": null,
+     "like_count": 0,
+     "message": "<div>Chất gì vậy</div>",
+     "attachments": []
+    },
+    {
+     "id": "122141383767055504_2366976067382429",
+     "type": "COMMENT",
+     "inserted_at": "2026-10-19T10:11:37.000000",
+     "parent_id": "122141383767055504_2366976067382429",
+     "comment_count": null,
+     "like_count": 0,
+     "message": "<div>Chất gì vậy</div>",
+     "attachments": []
+    },
+    {
+     "id": "122141383767055504_1127931216661754",
+     "type": "COMMENT",
+     "inserted_at": "2026-10-19T10:11:51.000000",
+     "parent_id": "122141383767055504_2366976067382429",
+     "comment_count": null,
+     "like_count": 0,
+     "message": "<div>Dạ chào chị Nguyễn Sau  , shop đã nhắn tin cho mình rồi đó ạ. Chị",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "organic",
+   "conv": {
+    "id": "834072796450267_29151391154486551",
+    "type": "INBOX",
+    "tags": [
+     6,
+     337,
+     388
+    ],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 5,
+    "page_id": "834072796450267",
+    "updated_at": "2026-10-19T10:12:08.000000",
+    "last_customer_interactive_at": null,
+    "snippet": "Chị cho xin chiều cao + cân nặng em chọn size phù hợp cho mìn...",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 08"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-08",
+      "name": "Khách 08"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "m_nNWMa0GLPgL2yzRY4xzEFOgkJK8zkFN4ZNLaHKYTYpWQS6_x9bu5Pe0Q2q-1nmNrd9uMDxWcx7TD5ApYaODkmw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:53.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Bạn đang phản hồi bình luận của người dùng về bài viết trên Trang",
+     "attachments": []
+    },
+    {
+     "id": "m_WOo2CzsxVmMuMitPPqOFt-gkJK8zkFN4ZNLaHKYTYpXmrG7Z5vAXkbiHqxq-2UPIMG0_WnqUqSqwnI-tydMW9w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:54.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Em chào chị ạ !!!</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_nNWMa0GLPgL2yzRY4xzEFOgkJK8zkFN4ZNLaHKYTYpWQS6_x9bu5Pe0Q2q-1nmNrd9uMDxWcx7TD5ApYaODkmw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:53.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Bạn đang phản hồi bình luận của người dùng về bài viết trên Trang",
+     "attachments": []
+    },
+    {
+     "id": "m_WOo2CzsxVmMuMitPPqOFt-gkJK8zkFN4ZNLaHKYTYpXmrG7Z5vAXkbiHqxq-2UPIMG0_WnqUqSqwnI-tydMW9w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:54.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Em chào chị ạ !!!</div>",
+     "attachments": [
+      {
+       "type": "link",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://facebook.com/834072796450267_122141383767055504",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_M1iRpTmsML3JAo8PwRe2YOgkJK8zkFN4ZNLaHKYTYpVu6apG6n4qZY5_UK9WCpR-76IYHTcOVE6xlEuf7t_ZaA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:04.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/16/037073d50a28c9a5e06bead56fe9e2994f27cf4c.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/16/929ebabda0b641e68551d962dbaa916b96eae1a4.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_3EqBkIvI0v8xqvOh1nldXegkJK8zkFN4ZNLaHKYTYpUF2m9ldUartpoB699cjU1cqlz3CH6t9cFWoBho7w4-pA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:06.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 𝟑𝟎% còn ( 1 áo 149k,  2 áo 199k, 3 áo 279k )❤️<br ke",
+     "attachments": []
+    },
+    {
+     "id": "m_nNWMa0GLPgL2yzRY4xzEFOgkJK8zkFN4ZNLaHKYTYpWQS6_x9bu5Pe0Q2q-1nmNrd9uMDxWcx7TD5ApYaODkmw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:53.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Bạn đang phản hồi bình luận của người dùng về bài viết trên Trang",
+     "attachments": []
+    },
+    {
+     "id": "m_WOo2CzsxVmMuMitPPqOFt-gkJK8zkFN4ZNLaHKYTYpXmrG7Z5vAXkbiHqxq-2UPIMG0_WnqUqSqwnI-tydMW9w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:54.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Em chào chị ạ !!!</div>",
+     "attachments": [
+      {
+       "type": "link",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://facebook.com/834072796450267_122141383767055504",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_M1iRpTmsML3JAo8PwRe2YOgkJK8zkFN4ZNLaHKYTYpVu6apG6n4qZY5_UK9WCpR-76IYHTcOVE6xlEuf7t_ZaA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:04.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/16/037073d50a28c9a5e06bead56fe9e2994f27cf4c.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/16/929ebabda0b641e68551d962dbaa916b96eae1a4.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_3EqBkIvI0v8xqvOh1nldXegkJK8zkFN4ZNLaHKYTYpUF2m9ldUartpoB699cjU1cqlz3CH6t9cFWoBho7w4-pA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:06.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 𝟑𝟎% còn ( 1 áo 149k,  2 áo 199k, 3 áo 279k )❤️<br ke",
+     "attachments": []
+    },
+    {
+     "id": "m_nNWMa0GLPgL2yzRY4xzEFOgkJK8zkFN4ZNLaHKYTYpWQS6_x9bu5Pe0Q2q-1nmNrd9uMDxWcx7TD5ApYaODkmw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:53.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Bạn đang phản hồi bình luận của người dùng về bài viết trên Trang",
+     "attachments": []
+    },
+    {
+     "id": "m_WOo2CzsxVmMuMitPPqOFt-gkJK8zkFN4ZNLaHKYTYpXmrG7Z5vAXkbiHqxq-2UPIMG0_WnqUqSqwnI-tydMW9w",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:11:54.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Em chào chị ạ !!!</div>",
+     "attachments": [
+      {
+       "type": "link",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://facebook.com/834072796450267_122141383767055504",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_M1iRpTmsML3JAo8PwRe2YOgkJK8zkFN4ZNLaHKYTYpVu6apG6n4qZY5_UK9WCpR-76IYHTcOVE6xlEuf7t_ZaA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:04.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/16/037073d50a28c9a5e06bead56fe9e2994f27cf4c.jpg",
+       "post_title": ""
+      },
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/16/929ebabda0b641e68551d962dbaa916b96eae1a4.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_3EqBkIvI0v8xqvOh1nldXegkJK8zkFN4ZNLaHKYTYpUF2m9ldUartpoB699cjU1cqlz3CH6t9cFWoBho7w4-pA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:06.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 𝟑𝟎% còn ( 1 áo 149k,  2 áo 199k, 3 áo 279k )❤️<br ke",
+     "attachments": []
+    },
+    {
+     "id": "m_ZLyv_5Gy9fALo3kcnYyb1egkJK8zkFN4ZNLaHKYTYpUh9JH_gA3151SSR5ZM5Xj0km5esmYe-onKzZGQOn6DoA",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:08.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chị cho xin chiều cao + cân nặng em chọn size phù hợp cho mình ch",
+     "attachments": []
+    }
+   ]
+  },
+  {
+   "expected": "ads",
+   "conv": {
+    "id": "675541385634278_29200040252964893",
+    "type": "INBOX",
+    "tags": [],
+    "extra_info": {},
+    "post_id": null,
+    "post": null,
+    "has_livestream_order": null,
+    "has_phone": false,
+    "unread_count": 0,
+    "message_count": 3,
+    "page_id": "675541385634278",
+    "updated_at": "2026-10-19T10:12:06.000000",
+    "last_customer_interactive_at": "2026-10-19T10:12:06",
+    "snippet": "xin giá",
+    "from": {
+     "id": "psid-anon",
+     "name": "Khách 09"
+    },
+    "customers": [
+     {
+      "fb_id": "psid-anon",
+      "id": "cust-09",
+      "name": "Khách 09"
+     }
+    ],
+    "from_psid": "psid-anon",
+    "recent_phone_numbers": [],
+    "last_sent_by": {
+     "name": "Page"
+    }
+   },
+   "messages": [
+    {
+     "id": "ad-2920004025296489312025026968938007817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:02.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120250269689380078",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122182740590857440",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_SRknxltY7vL5AAFPBOH2RDxJK-TCESXiQux6kjkqlfj4CV2PCVsIYI7FXejUbCRUD03hw-UDJ9OrA3ZQb-Bizw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:04.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hong Diep Vu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_wZ390umFCpKoHvBcwh6KyDxJK-TCESXiQux6kjkqlfht-bkH6Om-IBAzcYNOOwBPY0q7K9wZjck4vz9M2EUXcw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:05.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Hong Diep Vu  ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_1rLCp9pBxnPzzFChEDVnoDxJK-TCESXiQux6kjkqlfj7XchtHm91wDRmZlenbxHWjQKMNr5g-a-Kihy9sN7rgw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:06.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>xin giá</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-2920004025296489312025026968938007817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:02.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120250269689380078",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122182740590857440",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_SRknxltY7vL5AAFPBOH2RDxJK-TCESXiQux6kjkqlfj4CV2PCVsIYI7FXejUbCRUD03hw-UDJ9OrA3ZQb-Bizw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:04.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hong Diep Vu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_wZ390umFCpKoHvBcwh6KyDxJK-TCESXiQux6kjkqlfht-bkH6Om-IBAzcYNOOwBPY0q7K9wZjck4vz9M2EUXcw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:05.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Hong Diep Vu  ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_1rLCp9pBxnPzzFChEDVnoDxJK-TCESXiQux6kjkqlfj7XchtHm91wDRmZlenbxHWjQKMNr5g-a-Kihy9sN7rgw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:06.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>xin giá</div>",
+     "attachments": []
+    },
+    {
+     "id": "ad-2920004025296489312025026968938007817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:02.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120250269689380078",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122182740590857440",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_SRknxltY7vL5AAFPBOH2RDxJK-TCESXiQux6kjkqlfj4CV2PCVsIYI7FXejUbCRUD03hw-UDJ9OrA3ZQb-Bizw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:04.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hong Diep Vu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_wZ390umFCpKoHvBcwh6KyDxJK-TCESXiQux6kjkqlfht-bkH6Om-IBAzcYNOOwBPY0q7K9wZjck4vz9M2EUXcw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:05.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Hong Diep Vu  ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_1rLCp9pBxnPzzFChEDVnoDxJK-TCESXiQux6kjkqlfj7XchtHm91wDRmZlenbxHWjQKMNr5g-a-Kihy9sN7rgw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:06.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>xin giá</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_TksOYsEU5EwJD8J9sXVPXDxJK-TCESXiQux6kjkqlfgQWdrdrhrj0T7KVzBhCnrT3bQIUx9KpPy3Hzp6RITiRQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:43.883000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/26/6c3eed8f2d40d23f079c55b007c7af32d1305299.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "ad-2920004025296489312025026968938007817923680.0",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:02.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "ad_click",
+       "ad_id": "120250269689380078",
+       "click_from": "facebook",
+       "url": "https://www.facebook.com/122182740590857440",
+       "post_title": "𝐒𝐚𝐥𝐞 𝟑𝟎%\n\"#ÁO siêu XINH siêu HOT vừa cập bến.\n✅Giá #SALE bất chấp.\n❤ Sản phẩm gi"
+      }
+     ]
+    },
+    {
+     "id": "m_SRknxltY7vL5AAFPBOH2RDxJK-TCESXiQux6kjkqlfj4CV2PCVsIYI7FXejUbCRUD03hw-UDJ9OrA3ZQb-Bizw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:04.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Hong Diep Vu đã trả lời một quảng cáo.</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_wZ390umFCpKoHvBcwh6KyDxJK-TCESXiQux6kjkqlfht-bkH6Om-IBAzcYNOOwBPY0q7K9wZjck4vz9M2EUXcw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:05.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Chào chị Hong Diep Vu  ! Chị yêu cần shop tư vấn gì ạ?</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_1rLCp9pBxnPzzFChEDVnoDxJK-TCESXiQux6kjkqlfj7XchtHm91wDRmZlenbxHWjQKMNr5g-a-Kihy9sN7rgw",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:06.000000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>xin giá</div>",
+     "attachments": []
+    },
+    {
+     "id": "m_TksOYsEU5EwJD8J9sXVPXDxJK-TCESXiQux6kjkqlfgQWdrdrhrj0T7KVzBhCnrT3bQIUx9KpPy3Hzp6RITiRQ",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:43.883000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div></div>",
+     "attachments": [
+      {
+       "type": "photo",
+       "ad_id": null,
+       "click_from": null,
+       "url": "https://content.pancake.vn/2-2608/2026/8/26/6c3eed8f2d40d23f079c55b007c7af32d1305299.jpg",
+       "post_title": ""
+      }
+     ]
+    },
+    {
+     "id": "m_hjIio2jQLsRZ6mXiUKetmDxJK-TCESXiQux6kjkqlfinMM_xm2lxdvguQgcajAUpmoAH56UE7jZm-YoiZMYSNg",
+     "type": "INBOX",
+     "inserted_at": "2026-10-19T10:12:44.902000",
+     "parent_id": null,
+     "comment_count": null,
+     "like_count": null,
+     "message": "<div>Áo shop SALE 30% còn (1 áo 159k,  2 áo 259k, 3 áo 359k)❤️\r<br key",
+     "attachments": []
+    }
+   ]
+  }
+ ]
+}

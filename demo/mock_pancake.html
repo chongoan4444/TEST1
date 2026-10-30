@@ -8,121 +8,161 @@
   *{box-sizing:border-box}
   body{margin:0;background:#0f1220;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#111827}
   .app{display:flex;height:100vh}
-  .side{width:330px;background:#fff;border-right:1px solid #e6e9f0;display:flex;flex-direction:column}
-  .side h2{margin:0;padding:14px 16px 10px;font-size:15px;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
-  .side h2 .tag{font-size:10px;font-weight:700;background:#eef2ff;color:#4338ca;border-radius:6px;padding:2px 6px}
-  .list{overflow-y:auto;flex:1}
-  .conv{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f3f8;cursor:pointer}
-  .conv:hover{background:#f8f9ff}
-  .av{width:38px;height:38px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  .side{width:340px;background:#fff;border-right:1px solid #e6e9f0;display:flex;flex-direction:column}
+  .side h2{margin:0;padding:12px 14px 10px;font-size:14.5px;display:flex;align-items:center;gap:8px}
+  .side h2 .tag{font-size:9.5px;font-weight:700;background:#eef2ff;color:#4338ca;border-radius:6px;padding:2px 6px}
+  .conversation-list{overflow-y:auto;flex:1}
+  .conversation-list-item{display:flex;gap:10px;padding:9px 12px;border-bottom:1px solid #f1f3f8;cursor:pointer}
+  .conversation-list-item:hover{background:#f8f9ff}
+  .conversation-list-item.selected{background:#f3eeff}
+  .media-left{position:relative;flex:0 0 auto}
+  .av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
       color:#fff;font-weight:700;font-size:13px;background:#7c3aed}
-  .body{min-width:0;flex:1}
-  .l1{display:flex;align-items:center;gap:6px;justify-content:space-between}
-  .nm{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .tm{font-size:11px;color:#9ca3af;flex:0 0 auto}
-  .sn{font-size:12.5px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-  .pg{font-size:11px;color:#c3c8d4;margin-top:2px}
-  .un{background:#ef4444;color:#fff;font-size:10.5px;font-weight:700;border-radius:999px;padding:0 6px;margin-left:6px}
-  .main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#c7cbe0;padding:24px;text-align:center}
+  .media-body{min-width:0;flex:1}
+  .name-module{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .name-module-text{display:flex;align-items:center;min-width:0}
+  .name-text{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .time-modul{font-size:11px;color:#9ca3af;flex:0 0 auto}
+  .snippet-wrap{margin-top:1px}
+  .snippet-line{display:flex;align-items:center;gap:3px}
+  .snippet-text{font-size:12.5px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tag-wrap{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
+  .conversation_tags_item{font-size:9.5px;font-weight:600;color:#fff;border-radius:4px;padding:1px 5px;background:#94a3b8}
+  .unread .name-text{font-weight:800}
+  .unread .snippet-text{color:#111827;font-weight:600}
+  .main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+        color:#c7cbe0;padding:24px;text-align:center}
   .main h1{color:#fff;font-size:19px;margin:0;font-weight:650}
-  .main p{max-width:520px;font-size:13.5px;line-height:1.7;margin:0}
+  .main p{max-width:560px;font-size:13.5px;line-height:1.7;margin:0}
   .main code{background:#1c2136;color:#c4b5fd;padding:1px 6px;border-radius:5px;font-size:12.5px}
   .btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
   .btns button{background:#7c3aed;color:#fff;border:none;border-radius:9px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer}
   .btns button.ghost{background:#1c2136;color:#c7cbe0}
   .btns button:hover{filter:brightness(1.1)}
-  .note{font-size:12px;color:#8a90ab}
+  .note{font-size:12px;color:#8a90ab;max-width:600px}
 </style>
 </head>
 <body>
 <div class="app">
   <aside class="side">
     <h2>Hội thoại <span class="tag">MÔ PHỎNG</span></h2>
-    <div class="list" id="list">
-      <div class="conv" data-id="881264518397934_28856202704022307">
-        <div class="av">NÁ</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Ngọc Ánh</span><span class="tm">vừa xong<span class="un">2</span></span></div>
-          <div class="sn">Còn size M không shop, giá bao nhiêu ạ?</div>
-          <div class="pg">Khánh Ly Store</div>
+    <div class="conversation-list" id="conversation-list">
+      <div id="881264518397934_28856202704022307__0" class="media conversation-list-item unread">
+        <div class="media-left render-avatar-cus"><div class="av">NÁ</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Ngọc Ánh</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Còn size M không shop, giá bao nhiêu ạ?</div></div></div>
+          <div class="tag-wrap full-tag"><span class="conversation_tags_item">#4</span><span class="conversation_tags_item">#83</span></div>
         </div>
       </div>
-      <div class="conv" data-id="881264518397934_28856011122233">
-        <div class="av">TB</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Trần Bảo</span><span class="tm">vừa xong<span class="un">1</span></span></div>
-          <div class="sn">Mẫu trong video còn màu đen không ạ</div>
-          <div class="pg">Khánh Ly Store</div>
+      <div id="881264518397934_28856011122233__1" class="media conversation-list-item unread">
+        <div class="media-left render-avatar-cus"><div class="av">TB</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Trần Bảo</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Mẫu trong video còn màu đen không ạ</div></div></div>
+          <div class="tag-wrap full-tag"></div>
         </div>
       </div>
-      <div class="conv" data-id="881264518397934_28856099988877">
-        <div class="av">HN</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Hồng Nhung</span><span class="tm">vừa xong<span class="un">1</span></span></div>
-          <div class="sn">Ib mình mẫu này với ạ</div>
-          <div class="pg">Khánh Ly Store</div>
+      <div id="881264518397934_28856099988877__2" class="media conversation-list-item unread">
+        <div class="media-left render-avatar-cus"><div class="av">HN</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Hồng Nhung</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Ib mình mẫu này với ạ</div></div></div>
+          <div class="tag-wrap full-tag"></div>
         </div>
       </div>
-      <div class="conv" data-id="769625892902516_28856044455566">
-        <div class="av">KO</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Kim Oanh</span><span class="tm">vừa xong</span></div>
-          <div class="sn">Chốt 2 áo như trên live nha shop</div>
-          <div class="pg">Mai Boutique</div>
+      <div id="769625892902516_28856044455566__3" class="media conversation-list-item">
+        <div class="media-left render-avatar-cus"><div class="av">KO</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Kim Oanh</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Chốt 2 áo như trên live nha shop</div></div></div>
+          <div class="tag-wrap full-tag"><span class="conversation_tags_item">#172</span></div>
         </div>
       </div>
-      <div class="conv" data-id="769625892902516_28856077788899">
-        <div class="av">ĐH</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Đức Huy</span><span class="tm">vừa xong</span></div>
-          <div class="sn">Cho mình đặt 3 cái, ship về Hà Nội, sđt 0987654321 nhé</div>
-          <div class="pg">Mai Boutique</div>
+      <div id="769625892902516_28856077788899__4" class="media conversation-list-item">
+        <div class="media-left render-avatar-cus"><div class="av">ĐH</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Đức Huy</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Cho mình đặt 3 cái, ship về Hà Nội, sđt 0987654321 nhé</div></div></div>
+          <div class="tag-wrap full-tag"></div>
         </div>
       </div>
-      <div class="conv" data-id="898735919982398_28856022233344">
-        <div class="av">LP</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Lan Phương</span><span class="tm">vừa xong</span></div>
-          <div class="sn">Giá sỉ 50 cái bao nhiêu shop</div>
-          <div class="pg">Sỉ Áo Thun SG</div>
+      <div id="898735919982398_28856022233344__5" class="media conversation-list-item">
+        <div class="media-left render-avatar-cus"><div class="av">LP</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Lan Phương</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Giá sỉ 50 cái bao nhiêu shop</div></div></div>
+          <div class="tag-wrap full-tag"></div>
         </div>
       </div>
-      <div class="conv" data-id="898735919982398_28856066677788">
-        <div class="av">MT</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Minh Tuấn</span><span class="tm">vừa xong</span></div>
-          <div class="sn">Ok shop</div>
-          <div class="pg">Sỉ Áo Thun SG</div>
+      <div id="898735919982398_28856066677788__6" class="media conversation-list-item">
+        <div class="media-left render-avatar-cus"><div class="av">MT</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Minh Tuấn</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Ok shop</div></div></div>
+          <div class="tag-wrap full-tag"></div>
         </div>
       </div>
-      <div class="conv" data-id="881264518397934_28856033344455">
-        <div class="av">QV</div>
-        <div class="body">
-          <div class="l1"><span class="nm">Quốc Việt</span><span class="tm">vừa xong</span></div>
-          <div class="sn">Sản phẩm này bảo hành bao lâu</div>
-          <div class="pg">Khánh Ly Store</div>
+      <div id="881264518397934_28856033344455__7" class="media conversation-list-item">
+        <div class="media-left render-avatar-cus"><div class="av">QV</div></div>
+        <div class="media-body body-conver-item">
+          <div class="name-module platform-facebook">
+            <span class="name-module-text"><span class="name-text">Quốc Việt</span><span style="clear:left"></span></span>
+            <span class="time-modul">22:00</span>
+          </div>
+          <div class="snippet-wrap"><div class="snippet-line"><div class="snippet-text">Sản phẩm này bảo hành bao lâu</div></div></div>
+          <div class="tag-wrap full-tag"></div>
         </div>
       </div>
     </div>
   </aside>
   <main class="main">
-    <h1>Trang mô phỏng để xem userscript chạy</h1>
-    <p>Đây không phải Pancake thật. Trang giả lập đúng dữ liệu <code>/api/v1/conversations</code> để bạn thấy
-    userscript tự gắn nhãn <b>QC / BV / LV / TN</b> lên từng dòng và bảng nổi ở góc phải —
-    <b>không cần mở đoạn chat nào</b>.</p>
+    <h1>Trang mô phỏng — cấu trúc DOM giống Pancake</h1>
+    <p>Script đọc <code>.conversation-list-item</code> và <b>chỉ gắn nhãn cho dòng đang hiển thị</b>.
+    Nhãn <b>QC/BV/LV/TN/?</b> + điểm ưu tiên hiện ngay cạnh tên khách; hội thoại có quảng cáo chỉ được
+    nhận ra <b>sau khi script tự xem tin nhắn</b> (dấu <code>…</code> = chưa xem xong).</p>
     <div class="btns">
-      <button id="add">＋ Khách mới từ quảng cáo</button>
+      <button id="add">＋ Khách mới (từ quảng cáo)</button>
       <button class="ghost" id="refresh">↻ Đồng bộ lại</button>
-      <button class="ghost" onclick="location.href='../reports/demo_leads.html'">Mở báo cáo HTML →</button>
+      <button class="ghost" onclick="location.href='../reports/demo_leads.html'">Báo cáo HTML →</button>
     </div>
-    <p class="note"><b>Alt+O</b> để ẩn/hiện toàn bộ giao diện · <b>🔥</b> = khách nên chốt ngay (≥70 điểm) ·
-    bấm "＋ Khách mới" để thấy dòng chat vừa xuất hiện là có nhãn ngay.</p>
+    <p class="note"><b>Alt+O</b> ẩn/hiện tất cả · <b>▭</b> chỉ ẩn bảng (nhãn vẫn chạy) · <b>✕</b> ẩn tất cả,
+    nút <b>🏷️/▤</b> góc phải để mở lại · <b>🔥</b> = nên chốt ngay.</p>
   </main>
 </div>
 <script>
+// cấu hình mẫu (map tag id -> nguồn)
+try {
+  localStorage.setItem('leadSource.cfg', JSON.stringify({
+    tagMap: { "83": { name: "Từ quảng cáo", source: "ads" }, "172": { name: "Khách live", source: "live" } }
+  }));
+} catch (e) {}
+</script>
+<script>
 // ---------- giả lập API Pancake (chạy TRƯỚC userscript) ----------
-const DATA = {"convs": [{"id": "881264518397934_28856202704022307", "type": "INBOX", "tags": [4, 83], "seen": false, "extra_info": {"referral": {"source": "ADS", "ad_id": "120210987654321", "ref": "post_engagement", "ads_context_data": {"ad_title": "Áo thu đông SALE 30%"}}}, "from": {"email": "28856202704022307@facebook.com", "id": "28856202704022307", "name": "Ngọc Ánh"}, "post": null, "snippet": "Còn size M không shop, giá bao nhiêu ạ?", "inserted_at": "2026-10-30T01:06:44.544625", "updated_at": "2026-10-30T04:02:00.000000", "message_count": 4, "page_id": "881264518397934", "thread_id": "5242376081662629", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856202704022307", "id": "cust-28856202704022307", "name": "Ngọc Ánh"}], "from_psid": "28856202704022307", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T04:01:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_3947079832716749", "unread_count": 2}, {"id": "881264518397934_28856011122233", "type": "INBOX", "tags": [83], "seen": false, "extra_info": {"ads_context_data": {"ad_id": "120211111111111", "ad_title": "Váy hoa"}}, "from": {"email": "28856011122233@facebook.com", "id": "28856011122233", "name": "Trần Bảo"}, "post": null, "snippet": "Mẫu trong video còn màu đen không ạ", "inserted_at": "2026-10-30T01:06:44.544625", "updated_at": "2026-10-30T03:55:00.000000", "message_count": 2, "page_id": "881264518397934", "thread_id": "5384323669795193", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856011122233", "id": "cust-28856011122233", "name": "Trần Bảo"}], "from_psid": "28856011122233", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T03:54:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_2500174609080949", "unread_count": 1}, {"id": "881264518397934_28856099988877", "type": "COMMENT", "tags": [], "seen": false, "extra_info": {}, "from": {"email": "28856099988877@facebook.com", "id": "28856099988877", "name": "Hồng Nhung"}, "post": "1140326359158411", "snippet": "Ib mình mẫu này với ạ", "inserted_at": "2026-10-30T01:06:44.544625", "updated_at": "2026-10-30T03:27:00.000000", "message_count": 3, "page_id": "881264518397934", "thread_id": "9979505862103853", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856099988877", "id": "cust-28856099988877", "name": "Hồng Nhung"}], "from_psid": "28856099988877", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T03:26:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": "1140326359158411", "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_6063421268870876", "unread_count": 1}, {"id": "769625892902516_28856044455566", "type": "INBOX", "tags": [172], "seen": true, "extra_info": {}, "from": {"email": "28856044455566@facebook.com", "id": "28856044455566", "name": "Kim Oanh"}, "post": null, "snippet": "Chốt 2 áo như trên live nha shop", "inserted_at": "2026-10-30T01:06:44.544625", "updated_at": "2026-10-30T03:07:00.000000", "message_count": 5, "page_id": "769625892902516", "thread_id": "4599153035444009", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856044455566", "id": "cust-28856044455566", "name": "Kim Oanh"}], "from_psid": "28856044455566", "has_livestream_order": {"order_id": "LV-99120"}, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T03:06:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "769625892902516", "name": "Mai Boutique", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_5342999748643866", "unread_count": 0}, {"id": "769625892902516_28856077788899", "type": "INBOX", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856077788899@facebook.com", "id": "28856077788899", "name": "Đức Huy"}, "post": null, "snippet": "Cho mình đặt 3 cái, ship về Hà Nội, sđt 0987654321 nhé", "inserted_at": "2026-10-30T01:06:44.544625", "updated_at": "2026-10-30T02:37:00.000000", "message_count": 6, "page_id": "769625892902516", "thread_id": "7553741161753698", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856077788899", "id": "cust-28856077788899", "name": "Đức Huy"}], "from_psid": "28856077788899", "has_livestream_order": null, "has_phone": true, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T02:36:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "769625892902516", "name": "Mai Boutique", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": ["0987654321"], "recent_seen_users": [], "task_opened": null, "thread_key": "t_2334586480307257", "unread_count": 0}, {"id": "898735919982398_28856022233344", "type": "INBOX", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856022233344@facebook.com", "id": "28856022233344", "name": "Lan Phương"}, "post": null, "snippet": "Giá sỉ 50 cái bao nhiêu shop", "inserted_at": "2026-10-30T040:06:44.544625", "updated_at": "2026-10-28T12:07:00.000000", "message_count": 2, "page_id": "898735919982398", "thread_id": "2353597931872862", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856022233344", "id": "cust-28856022233344", "name": "Lan Phương"}], "from_psid": "28856022233344", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-28T12:06:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "898735919982398", "name": "Sỉ Áo Thun SG", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_1255703523756538", "unread_count": 0}, {"id": "898735919982398_28856066677788", "type": "INBOX", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856066677788@facebook.com", "id": "28856066677788", "name": "Minh Tuấn"}, "post": null, "snippet": "Ok shop", "inserted_at": "2026-10-30T0144:06:44.544625", "updated_at": "2026-10-24T04:07:00.000000", "message_count": 1, "page_id": "898735919982398", "thread_id": "9494416461849906", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856066677788", "id": "cust-28856066677788", "name": "Minh Tuấn"}], "from_psid": "28856066677788", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-24T04:06:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "898735919982398", "name": "Sỉ Áo Thun SG", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_6674515620618837", "unread_count": 0}, {"id": "881264518397934_28856033344455", "type": "POSTBACK", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856033344455@facebook.com", "id": "28856033344455", "name": "Quốc Việt"}, "post": null, "snippet": "Sản phẩm này bảo hành bao lâu", "inserted_at": "2026-10-30T03:06:44.544625", "updated_at": "2026-10-30T00:47:00.000000", "message_count": 2, "page_id": "881264518397934", "thread_id": "7000048962416651", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856033344455", "id": "cust-28856033344455", "name": "Quốc Việt"}], "from_psid": "28856033344455", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T00:46:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_1475027369459012", "unread_count": 0}], "msgs": {"881264518397934_28856011122233": [{"id": "m1", "type": "message", "conversation_id": "881264518397934_28856011122233", "message": "Mẫu trong video còn màu đen không ạ", "from_id": "28856011122233", "inserted_at": "2026-10-30T03:55:00.000000", "ads_context_data": {"ad_id": "120211111111111"}}], "881264518397934_28856202704022307": [{"id": "m2", "type": "message", "conversation_id": "881264518397934_28856202704022307", "message": "Còn size M không shop, giá bao nhiêu ạ?", "from_id": "28856202704022307", "inserted_at": "2026-10-30T04:02:00.000000", "referral": {"ad_id": "120210987654321", "source": "ADS"}}]}};
-const jsonRes = o => ({ ok: true, status: 200, json: () => Promise.resolve(o), clone(){ return this; } });
+const DATA = {"convs": [{"id": "881264518397934_28856202704022307", "type": "INBOX", "tags": [4, 83], "seen": false, "extra_info": {}, "from": {"email": "28856202704022307@facebook.com", "id": "28856202704022307", "name": "Ngọc Ánh"}, "post": null, "snippet": "Còn size M không shop, giá bao nhiêu ạ?", "inserted_at": "2026-10-30T04:02:00.000000", "updated_at": "2026-10-30T04:02:00.000000", "message_count": 4, "page_id": "881264518397934", "thread_id": "6829635643963101", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856202704022307", "id": "cust-28856202704022307", "name": "Ngọc Ánh"}], "from_psid": "28856202704022307", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T04:02:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_6829635643963101", "unread_count": 2}, {"id": "881264518397934_28856011122233", "type": "INBOX", "tags": [], "seen": false, "extra_info": {}, "from": {"email": "28856011122233@facebook.com", "id": "28856011122233", "name": "Trần Bảo"}, "post": null, "snippet": "Mẫu trong video còn màu đen không ạ", "inserted_at": "2026-10-30T03:55:00.000000", "updated_at": "2026-10-30T03:55:00.000000", "message_count": 2, "page_id": "881264518397934", "thread_id": "5703657187976636", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856011122233", "id": "cust-28856011122233", "name": "Trần Bảo"}], "from_psid": "28856011122233", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T03:55:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_5703657187976636", "unread_count": 1}, {"id": "881264518397934_28856099988877", "type": "COMMENT", "tags": [], "seen": false, "extra_info": {}, "from": {"email": "28856099988877@facebook.com", "id": "28856099988877", "name": "Hồng Nhung"}, "post": "1140326359158411", "snippet": "Ib mình mẫu này với ạ", "inserted_at": "2026-10-30T03:27:00.000000", "updated_at": "2026-10-30T03:27:00.000000", "message_count": 3, "page_id": "881264518397934", "thread_id": "7037288768346083", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856099988877", "id": "cust-28856099988877", "name": "Hồng Nhung"}], "from_psid": "28856099988877", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T03:27:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": "1140326359158411", "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_7037288768346083", "unread_count": 1}, {"id": "769625892902516_28856044455566", "type": "INBOX", "tags": [172], "seen": true, "extra_info": {}, "from": {"email": "28856044455566@facebook.com", "id": "28856044455566", "name": "Kim Oanh"}, "post": null, "snippet": "Chốt 2 áo như trên live nha shop", "inserted_at": "2026-10-30T03:07:00.000000", "updated_at": "2026-10-30T03:07:00.000000", "message_count": 5, "page_id": "769625892902516", "thread_id": "6800336967240647", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856044455566", "id": "cust-28856044455566", "name": "Kim Oanh"}], "from_psid": "28856044455566", "has_livestream_order": {"order_id": "LV-99120"}, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T03:07:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "769625892902516", "name": "Mai Boutique", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_6800336967240647", "unread_count": 0}, {"id": "769625892902516_28856077788899", "type": "INBOX", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856077788899@facebook.com", "id": "28856077788899", "name": "Đức Huy"}, "post": null, "snippet": "Cho mình đặt 3 cái, ship về Hà Nội, sđt 0987654321 nhé", "inserted_at": "2026-10-30T02:37:00.000000", "updated_at": "2026-10-30T02:37:00.000000", "message_count": 6, "page_id": "769625892902516", "thread_id": "2633117281979272", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856077788899", "id": "cust-28856077788899", "name": "Đức Huy"}], "from_psid": "28856077788899", "has_livestream_order": null, "has_phone": true, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T02:37:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "769625892902516", "name": "Mai Boutique", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": ["0987654321"], "recent_seen_users": [], "task_opened": null, "thread_key": "t_2633117281979272", "unread_count": 0}, {"id": "898735919982398_28856022233344", "type": "INBOX", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856022233344@facebook.com", "id": "28856022233344", "name": "Lan Phương"}, "post": null, "snippet": "Giá sỉ 50 cái bao nhiêu shop", "inserted_at": "2026-10-28T12:07:00.000000", "updated_at": "2026-10-28T12:07:00.000000", "message_count": 2, "page_id": "898735919982398", "thread_id": "2244950811061146", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856022233344", "id": "cust-28856022233344", "name": "Lan Phương"}], "from_psid": "28856022233344", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-28T12:07:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "898735919982398", "name": "Sỉ Áo Thun SG", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_2244950811061146", "unread_count": 0}, {"id": "898735919982398_28856066677788", "type": "INBOX", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856066677788@facebook.com", "id": "28856066677788", "name": "Minh Tuấn"}, "post": null, "snippet": "Ok shop", "inserted_at": "2026-10-24T04:07:00.000000", "updated_at": "2026-10-24T04:07:00.000000", "message_count": 1, "page_id": "898735919982398", "thread_id": "5624940001031732", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856066677788", "id": "cust-28856066677788", "name": "Minh Tuấn"}], "from_psid": "28856066677788", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-24T04:07:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "898735919982398", "name": "Sỉ Áo Thun SG", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_5624940001031732", "unread_count": 0}, {"id": "881264518397934_28856033344455", "type": "POSTBACK", "tags": [], "seen": true, "extra_info": {}, "from": {"email": "28856033344455@facebook.com", "id": "28856033344455", "name": "Quốc Việt"}, "post": null, "snippet": "Sản phẩm này bảo hành bao lâu", "inserted_at": "2026-10-30T00:47:00.000000", "updated_at": "2026-10-30T00:47:00.000000", "message_count": 2, "page_id": "881264518397934", "thread_id": "3004411127149087", "assignee_ids": [], "assignee_group_id": null, "customers": [{"fb_id": "28856033344455", "id": "cust-28856033344455", "name": "Quốc Việt"}], "from_psid": "28856033344455", "has_livestream_order": null, "has_phone": false, "is_combined": false, "is_removed": false, "last_customer_interactive_at": "2026-10-30T00:47:00.000000", "last_sent_by": {"admin_name": "Đinh Lan Mai", "id": "881264518397934", "name": "Khánh Ly Store", "uid": "69c3a77d-e5bd-4202-89ab-da84f79b898a"}, "post_id": null, "read_watermarks": [], "recent_phone_numbers": [], "recent_seen_users": [], "task_opened": null, "thread_key": "t_3004411127149087", "unread_count": 0}], "msgs": {"881264518397934_28856011122233": [{"id": "ad-120211111111111.0", "message": "<div></div>", "type": "INBOX", "seen": false, "from": {"id": "881264518397934", "name": "Khánh Ly Store"}, "inserted_at": "2026-10-30T03:55:00.000000", "page_id": "881264518397934", "conversation_id": "881264518397934_28856011122233", "attachments": [{"ad_id": "120211111111111", "click_from": "facebook", "type": "ad_click", "url": "https://www.facebook.com/120211111111111", "post_attachments": [{"type": "video_direct_response", "description": "Váy hoa mùa thu"}]}], "has_phone": false, "is_removed": false, "comment_count": null, "like_count": null, "parent_id": null, "rich_message": null, "message_tags": []}], "881264518397934_28856202704022307": [{"id": "m-1", "type": "INBOX", "message": "Còn size M không shop?", "conversation_id": "881264518397934_28856202704022307", "page_id": "881264518397934", "inserted_at": "2026-10-30T04:02:00.000000", "attachments": [], "parent_id": null}]}};
+const jsonRes = o => ({ ok: true, status: 200, json: () => Promise.resolve(o), clone() { return this; } });
 window.fetch = function (input, init) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   const m = /\/conversations\/([^/?#]+)\/messages/.exec(url);
@@ -130,7 +170,7 @@ window.fetch = function (input, init) {
     const id = decodeURIComponent(m[1]);
     return Promise.resolve(jsonRes({ success: true, messages: DATA.msgs[id] || [] }));
   }
-  if (/\/api\/v1\/conversations(\?|$)/.test(url)) {
+  if (/\/api\/v1\/(pages\/[^/]+\/)?conversations(\?|$)/.test(url)) {
     return Promise.resolve(jsonRes({ success: true, conversations: DATA.convs }));
   }
   return Promise.resolve(jsonRes({ success: true }));
@@ -139,39 +179,53 @@ window.fetch = function (input, init) {
 <script src="../userscripts/pancake-lead-badges.user.js"></script>
 <script>
 // ---------- hành vi "app" ----------
-const listEl = document.getElementById('list');
+const listEl = document.getElementById('conversation-list');
 let seq = 0;
-const newLeads = [{"id": "881264518397934_28856123400001", "type": "INBOX", "tags": [83], "extra_info": {"referral": {"source": "ADS", "ad_id": "120219999999999", "ads_context_data": {"ad_title": "Váy hoa mùa thu"}}}, "from": {"name": "Khách mới {n}"}, "customers": [{"name": "Khách mới {n}"}], "snippet": "Giá cái này bao nhiêu shop ơi, còn size L không {n}", "last_sent_by": {"name": "Khánh Ly Store"}, "unread_count": 1, "has_phone": false, "recent_phone_numbers": [], "updated_at": "", "last_customer_interactive_at": "", "message_count": 1}];
+const newLeads = [{"id": "881264518397934_28856900000001", "type": "INBOX", "tags": [], "extra_info": {}, "from": {"name": "Khách mới {n}"}, "customers": [{"name": "Khách mới {n}"}], "snippet": "Giá cái này bao nhiêu shop ơi, còn size L không {n}", "last_sent_by": {"name": "Khánh Ly Store"}, "unread_count": 1, "has_phone": false, "recent_phone_numbers": [], "updated_at": "", "last_customer_interactive_at": "", "message_count": 1}];
 
-function rowHtml(c) {
-  const initials = c.customers[0].name.trim().split(/\s+/).map(w => w[0]).slice(-2).join('').toUpperCase();
-  const unread = c.unread_count ? `<span class="un">${c.unread_count}</span>` : '';
-  return `<div class="conv" data-id="${c.id}">
-    <div class="av">${initials}</div>
-    <div class="body">
-      <div class="l1"><span class="nm">${c.customers[0].name}</span><span class="tm">vừa xong${unread}</span></div>
-      <div class="sn">${c.snippet}</div>
-      <div class="pg">${c.last_sent_by.name}</div>
+function initials(name) {
+  const p = String(name).trim().split(/\s+/).filter(Boolean);
+  return (p.length > 1 ? p[p.length - 2][0] + p[p.length - 1][0] : (p[0] || '?').slice(0, 2)).toUpperCase();
+}
+
+function rowHtml(c, idx) {
+  const name = c.customers[0].name;
+  const tags = (c.tags || []).map(t => `<span class="conversation_tags_item">#${t}</span>`).join('');
+  const cls = 'media conversation-list-item' + (c.unread_count ? ' unread' : '');
+  return `<div id="${c.id}__${idx}" class="${cls}">
+    <div class="media-left render-avatar-cus"><div class="av">${initials(name)}</div></div>
+    <div class="media-body body-conver-item">
+      <div class="name-module platform-facebook">
+        <span class="name-module-text"><span class="name-text">${name}</span><span style="clear:left"></span></span>
+        <span class="time-modul">22:00</span>
+      </div>
+      <div class="snippet-wrap"><div class="snippet-line">
+        <div class="snippet-text">${c.snippet}</div></div></div>
+      <div class="tag-wrap full-tag">${tags}</div>
     </div>
   </div>`;
 }
-listEl.innerHTML = DATA.convs.map(rowHtml).join('');
 
-// app gọi API lần đầu
+listEl.innerHTML = DATA.convs.map((c, i) => rowHtml(c, i)).join('');
+
+// app gọi API lần đầu (POST danh sách nhiều page)
 fetch('/api/v1/conversations?unread_first=true&mode=OR&from_platform=web', { method: 'POST' });
 
 document.getElementById('add').addEventListener('click', () => {
   const c = JSON.parse(JSON.stringify(newLeads[seq % newLeads.length]));
   seq++;
-  c.id = c.id + '_' + seq;
+  c.id = c.id + seq;
   c.customers[0].name = c.customers[0].name.replace('{n}', '#' + seq);
   c.snippet = c.snippet.replace('{n}', '');
   c.updated_at = new Date().toISOString();
   c.last_customer_interactive_at = new Date().toISOString();
   DATA.convs.unshift(c);
-  listEl.insertAdjacentHTML('afterbegin', rowHtml(c));
+  const first = listEl.firstElementChild;
+  const idx = first ? (parseInt((first.id.split('__')[1] || '0'), 10) + 1) : 0;
+  listEl.insertAdjacentHTML('afterbegin', rowHtml(c, idx));
   fetch('/api/v1/conversations?unread_first=true&mode=OR&from_platform=web', { method: 'POST' });
 });
+
 document.getElementById('refresh').addEventListener('click', () => {
   fetch('/api/v1/conversations?unread_first=true&mode=OR&from_platform=web', { method: 'POST' });
   if (window.__leadSource) window.__leadSource.refresh();

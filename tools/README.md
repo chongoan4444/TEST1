@@ -11,53 +11,77 @@ tools/
 ├── make_sample_data.py   # sinh HAR mẫu để xem thử giao diện
 ├── serve_reports.py      # mở báo cáo HTML bằng web server nhỏ
 ├── test_userscript.js    # (JS) so classifier userscript với bản Python
-├── test_userscript_dom.js# (JS + jsdom) test gắn nhãn trên danh sách
+├── test_userscript_dom.js# (JS + jsdom) test nhãn / Alt+O / chỉ dòng hiển thị
+├── test_userscript_real.js# (JS) test classifier trên dữ liệu THẬT
+├── build_real_fixture.py # rút dữ liệu thật từ HAR -> demo/real_leads.json
 └── rules.example.json    # cấu hình: map tag → nguồn, từ khoá ý định, trọng số điểm
 reports/                  # báo cáo xuất ra (.html + .csv)
 demo/                     # HAR mẫu + rules mẫu
 ```
 
-## ⚡ Cách nhanh nhất: userscript Tampermonkey (phân loại ngay trên Pancake)
+## ⚡ Userscript Tampermonkey (khuyến nghị)
 
-Không cần mở từng đoạn chat. Script đọc payload `/api/v1/conversations` mà Pancake đã tải về,
-nên **hội thoại vừa hiện ra trong danh sách là có nhãn ngay**.
+Cài: Tampermonkey → *Create a new script* → dán `userscripts/pancake-lead-badges.user.js` → Ctrl+S → mở
+`pancake.vn` trang **Hội thoại**.
 
-1. Cài [Tampermonkey](https://www.tampermonkey.net/) → **Create a new script**.
-2. Dán toàn bộ nội dung `userscripts/pancake-lead-badges.user.js` → **Ctrl+S**.
-3. Mở `pancake.vn` → trang **Hội thoại (multi_pages)**.
+**Chỉ gắn nhãn cho các dòng ĐANG HIỂN THỊ trên màn hình** (Pancake dùng danh sách ảo hoá nên mỗi lượt chỉ
+có vài chục dòng trong DOM). Cuộn tới đâu, nhãn xuất hiện tới đó — nhờ vậy không lag dù có hàng nghìn hội thoại.
 
-Bạn sẽ thấy:
-
-- **Nhãn ngay trên từng dòng hội thoại**, cập nhật liên tục khi có chat mới load vào:
-  `🔥 QC 90` (quảng cáo, nên chốt ngay) · `BV 85` (bài viết) · `LV 50` (live) · `TN 30` (tự nhắn) · `? 20` (chưa rõ).
-  Rê chuột vào nhãn → xem **bằng chứng** đã dùng để phân loại + lý do có điểm đó.
-- **Bảng nổi góc phải**: đếm theo từng nguồn, danh sách xếp theo điểm, 🔍 nhảy tới dòng, 📋 copy
-  `tên | psid | nguồn | điểm`, ↻ xem tin nhắn để phân loại chính xác hơn.
-- **Bảng kí hiệu** ngay trong panel (nút `?` để bật/tắt): QC / BV / LV / TN / ? / 🔥 / Ưu tiên / Theo dõi.
-
-**Bật / tắt giao diện:**
-
-| Cách | Kết quả |
-|---|---|
-| `Alt + O` (lúc nào cũng dùng được) | ẩn/hiện cả panel + toàn bộ nhãn |
-| Nút `✕` trên panel | ẩn giao diện |
-| Nút tròn `🏷️` góc phải (hiện khi đang ẩn) | bật lại |
-| `__leadSource.hide()` / `.show()` / `.toggle()` | điều khiển bằng console |
-
-Trạng thái bật/tắt được lưu vào `localStorage` nên reload trang vẫn nhớ.
-
-**Xem demo không cần Pancake:** mở `demo/mock_pancake.html` (trang mô phỏng danh sách hội thoại,
-bấm `＋ Khách mới từ quảng cáo` để thấy nhãn xuất hiện ngay).
-
-**Test tự động:**
-
-```bash
-node tools/test_userscript.js                        # classifier JS == Python (không cần cài gì)
-npm i jsdom && node tools/test_userscript_dom.js     # 22 kiểm tra: nhãn từng dòng, Alt+O, khách mới, tự cập nhật
+```
+🔥 QC 90   Ngọc Ánh     Còn size M không shop…
+🔥 TN 70…  Trần Bảo     Mẫu trong video còn màu đen…   (đang xem tin nhắn)
+🔥 BV 85   Hồng Nhung   Ib mình mẫu này với ạ
 ```
 
-> Lưu ý: userscript chỉ **đọc** dữ liệu và vẽ badge, không sửa/gửi gì lên Pancake. Đừng hạ `pollMs`
-> xuống quá thấp để tránh bị giới hạn request.
+- `…` = **chưa xem tin nhắn xong** (chưa chắc nguồn) — script tự xem tin nhắn của **các dòng đang hiển thị**
+  rồi tự đổi nhãn (`TN 70…` → `QC 80`), không cần bạn mở chat.
+- Rê chuột vào nhãn: nguồn · điểm · độ tin cậy · **bằng chứng**.
+
+### Bật / tắt
+
+| Điều khiển | Tác dụng |
+|---|---|
+| **Alt + O** | ẩn/hiện **tất cả** (bảng + nhãn). Nút 🏷️ vẫn còn để bật lại |
+| **✕** trên bảng | như Alt+O |
+| **▭** trên bảng | **chỉ ẩn bảng — nhãn trên dòng chat vẫn chạy** (phân loại vẫn hoạt động khi giao diện tắt) |
+| Nút nổi **🏷️ / ▤** góc phải | mở lại bảng/tất cả |
+| `__leadSource.hide() / .show() / .toggle()` | điều khiển bằng console |
+
+Dữ liệu, enrich và phân loại **luôn chạy kể cả khi đã ẩn giao diện** → bật lại là có nhãn ngay, không phải chờ.
+
+### Vì sao nhanh (không lag)
+
+| Trước (v2) | Nay (v3) |
+|---|---|
+| Quét toàn bộ `span,div,a,p,b,strong,h4` của trang mỗi 400 ms | chỉ đọc `.conversation-list-item` và lọc theo khung nhìn (`getBoundingClientRect`) |
+| Đoán dòng bằng cách so khớp **tên khách** | khớp chính xác bằng `id` thật: `<page_id>_<psid>__<n>` |
+| MutationObserver trên `document.documentElement` + `characterData` | chỉ trên `.conversation-list` |
+| Vẽ lại bảng mỗi 200 ms | vẽ lại khi dữ liệu đổi (so signature), tối đa 0,7 s/lần |
+| Enrich mọi hội thoại | enrich **chỉ dòng đang hiển thị**, 4 hội thoại/lượt, cache 10 phút |
+
+### Cấu hình (console, lưu vào localStorage)
+
+```js
+__leadSource.set({ tagMap: { "83": { name: "Từ quảng cáo", source: "ads" } } })   // tag id từ API
+__leadSource.set({ tagNameSource: { "QC": "ads", "LIVE": "live" } })             // tên tag trên dòng chat
+__leadSource.set({ enrichVisible: false })        // tắt xem tin nhắn ngầm
+__leadSource.set({ enrichLimit: 8, pollMs: 30000, scanMs: 2000 })
+__leadSource.set({ enabled: false })              // như Alt+O
+__leadSource.visibleRows                          // id các hội thoại đang hiển thị
+__leadSource.help()
+```
+
+## 🧪 Dữ liệu thật nói gì (đọc từ `loaddanhsach.har` + `batmesss.har`)
+
+| Phát hiện | Ý nghĩa |
+|---|---|
+| `extra_info` **luôn rỗng**, `post_id`/`post` **luôn null** (947 hội thoại) | ❌ không thể biết nguồn chỉ từ danh sách hội thoại |
+| `type` = `INBOX` (946) / `COMMENT` (2) | ✅ comment nhận ra ngay từ danh sách |
+| Tin nhắn có `attachments[].type = "ad_click"` + `attachments[].ad_id` | ✅ **đây là dấu hiệu quảng cáo thật** — nhưng phải xem tin nhắn |
+| `has_livestream_order` luôn null; `is_livestream_order` có trong message | livestream lấy từ message |
+| Điểm danh sách: `GET /api/v1/pages/<page>/conversations`; tin nhắn: `GET /api/v1/pages/<page>/conversations/<id>/messages` | đúng URL script dùng để enrich |
+
+Kết quả trên 9 hội thoại thật (đã ẩn danh, `demo/real_leads.json`): **9/9 đúng** — 5 quảng cáo, 2 bài viết, 2 tự nhắn.
 
 ## Chạy thử ngay với dữ liệu có sẵn
 

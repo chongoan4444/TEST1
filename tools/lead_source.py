@@ -43,11 +43,15 @@ from datetime import datetime, timedelta, timezone
 AD_KEYS = {
     "ad_id", "ad_ids", "adset_id", "adset_name", "campaign_id", "campaign_name",
     "ad_name", "ad_name_id", "ads_context_data", "referral", "ad_referral",
-    "is_ad", "from_ad", "click_id", "adgroup_id", "source_ad_id",
+    "is_ad", "from_ad", "adgroup_id", "source_ad_id", "click_from",
 }
 
+# Tín hiệu quảng cáo THẬT của Pancake: message.attachments[].type = "ad_click" + ad_id
+AD_TYPE_VALUES = {"ad_click", "ad_referral", "ad"}
+
 # Key cho thấy hội thoại sinh ra từ comment bài viết.
-POST_KEYS = {"post_id", "post", "comment_id", "post_story", "post_permalink", "live_video_id"}
+POST_KEYS = {"post_id", "post", "comment_id", "post_story", "post_permalink"}
+LIVE_KEYS = {"has_livestream_order", "is_livestream_order", "live_video_id"}
 
 # Giá trị "type" được coi là comment (Pancake dùng INBOX cho tin nhắn).
 COMMENT_TYPE_HINTS = ("COMMENT", "REPLY", "POST_COMMENT")
@@ -312,6 +316,10 @@ def classify(conv, msgs, rules):
     # bỏ dòng cha nếu đã có dòng con chi tiết hơn
     ad_hits = [h for h in ad_hits
                if not any(o != h and o.split(" = ")[0].startswith(h.split(" = ")[0] + ".") for o in ad_hits)]
+    for i, m in enumerate(msgs):
+        for j, a in enumerate((m.get("attachments") or []) if isinstance(m, dict) else []):
+            if isinstance(a, dict) and str(a.get("type") or "").lower() in AD_TYPE_VALUES:
+                ad_hits.append(f"messages[{i}].attachments[{j}].type = {a.get('type')}")
     if ad_hits:
         source, confidence = "ads", "high"
         evidence.extend(ad_hits[:4])
@@ -336,13 +344,15 @@ def classify(conv, msgs, rules):
             evidence.append(f"type = {conv_type or '/'.join(sorted(msg_types))} → comment")
 
     # ---- 3. Livestream
-    live_order = conv.get("has_livestream_order") not in (None, False, "", {})
+    live_hits = [(p, v) for p, v in deep_find({"conv": conv, "messages": msgs}, LIVE_KEYS)
+                 if v not in (None, "", {}, [], False, 0)]
     live_type = any(h in conv_type for h in LIVE_TYPE_HINTS) or any(
         any(h in t for h in LIVE_TYPE_HINTS) for t in msg_types)
-    if live_order or live_type:
+    if live_hits or live_type:
         if source is None:
             source, confidence = "live", "mid"
-        evidence.append("has_livestream_order có giá trị" if live_order else f"type = {conv_type} → live")
+        if live_hits:
+            evidence.append(f"{live_hits[0][0]} = {jsonify(live_hits[0][1])}")
 
     # ---- 4. Tag (đối chiếu rules.tag_map)
     tag_map = rules.get("tag_map") or {}

@@ -17,7 +17,14 @@ const HAR = path.join(ROOT, 'demo', 'sample_messages.har');
 const CSV = path.join(ROOT, 'reports', 'demo_leads.csv');
 const NOW = new Date('2026-10-30T04:10:00Z');
 
-const { buildLead } = require(path.join(ROOT, 'userscripts', 'pancake-lead-badges.user.js'));
+const { buildLead, CFG } = require(path.join(ROOT, 'userscripts', 'pancake-lead-badges.user.js'));
+
+// dùng đúng cấu hình như demo/rules_demo.json (map tag -> nguồn)
+CFG.tagMap = {
+  "4": { name: 'Khách mới', source: null },
+  "83": { name: 'Từ quảng cáo', source: 'ads' },
+  "172": { name: 'Khách live', source: 'live' },
+};
 
 function readHar(file) {
   const har = JSON.parse(fs.readFileSync(file, 'utf8'));

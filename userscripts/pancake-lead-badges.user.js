@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.0.0
-// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên ngay trên từng dòng hội thoại Pancake, cập nhật liên tục. Alt+O để bật/tắt.
+// @version      3.0.0
+// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên cho các hội thoại ĐANG HIỂN THỊ trên Pancake. Alt+O bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
 // @match        https://*.pancake.vn/*
@@ -15,20 +15,23 @@
   'use strict';
 
   // ======================================================================
-  // 1. CẤU HÌNH  (đổi trực tiếp ở đây, hoặc trong console:
-  //    __leadSource.set({pollMs:10000}))
+  // 1. CẤU HÌNH
+  //    __leadSource.set({...})  |  Alt+O ẩn/hiện  |  __leadSource.help()
   // ======================================================================
   const DEFAULTS = {
-    enabled: true,        // bật/tắt toàn bộ giao diện (Alt+O)
-    pollMs: 20000,        // tự gọi lại danh sách hội thoại mỗi N ms (0 = tắt)
-    autoEnrich: true,     // khách mới/chưa rõ -> tự xem tin nhắn để phân loại chính xác
-    enrichLimit: 3,       // tối đa N hội thoại enrich mỗi vòng
-    showPanel: true,      // hiện bảng nổi
-    showChips: true,      // gắn nhãn vào từng dòng trong danh sách
-    showLegend: true,     // hiện bảng kí hiệu trong panel
-    topN: 12,             // số dòng hiện trong bảng nổi
-    tickMs: 1200,         // chu kỳ quét lại danh sách để cập nhật nhãn
-    tagMap: {},           // {'83': {name:'Từ quảng cáo', source:'ads'}, '172': {name:'Live', source:'live'}}
+    enabled: true,          // BẬT/TẮT toàn bộ (Alt+O hoặc nút ✕) — dữ liệu vẫn được cập nhật ngầm
+    showPanel: true,        // riêng bảng nổi (nút ▭) — nhãn trên dòng chat vẫn chạy
+    showChips: true,
+    showLegend: true,
+    pollMs: 25000,          // gọi lại danh sách hội thoại
+    scanMs: 1500,           // quét dự phòng các dòng ĐANG HIỂN THỊ
+    enrichVisible: true,    // chỉ xem tin nhắn của hội thoại đang hiển thị (để nhận ra quảng cáo)
+    enrichLimit: 4,         // tối đa N hội thoại mỗi lượt
+    enrichSpacing: 700,     // ms giữa 2 request
+    enrichTTL: 600000,      // không hỏi lại hội thoại đã hỏi trong 10 phút
+    topN: 12,
+    tagMap: {},             // {'83': {name:'Từ quảng cáo', source:'ads'}}  (tag id từ API)
+    tagNameSource: {},      // {'QC': 'ads', 'live': 'live'}  (tên tag hiện trên dòng chat)
     weights: { unread: 30, recent_24h: 20, recent_3d: 10, has_phone: 15, many_msgs: 10, intent: 20, source_ads: 10, source_post: 5 },
     thresholds: { hot: 70, warm: 40 },
     intent: ['gia', 'bao nhieu', 'nhieu tien', 'size', 'mau', 'con hang', 'con khong', 'dat hang', 'dat',
@@ -45,7 +48,7 @@
         out[k] = (user[k] && typeof user[k] === 'object' && !Array.isArray(user[k]) && out[k] && typeof out[k] === 'object')
           ? Object.assign({}, out[k], user[k]) : user[k];
       });
-    } catch (e) { /* cfg hỏng -> dùng mặc định */ }
+    } catch (e) { /* cfg hỏng -> mặc định */ }
     return out;
   })();
 
@@ -55,16 +58,19 @@
   const CONF_LABEL = { high: 'cao', mid: 'trung bình', low: 'thấp' };
   const PRIO_LABEL = { hot: 'CHỐT NGAY', warm: 'Ưu tiên', cold: 'Theo dõi' };
 
+  // Tín hiệu QUẢNG CÁO thật của Pancake: message.attachments[].type = "ad_click" + ad_id
   const AD_KEYS = ['ad_id', 'ad_ids', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name', 'ad_name',
-    'ad_name_id', 'ads_context_data', 'referral', 'ad_referral', 'is_ad', 'from_ad', 'click_id', 'adgroup_id', 'source_ad_id'];
-  const POST_KEYS = ['post_id', 'post', 'comment_id', 'post_story', 'post_permalink', 'live_video_id'];
+    'ad_name_id', 'ads_context_data', 'referral', 'ad_referral', 'is_ad', 'from_ad', 'adgroup_id',
+    'source_ad_id', 'click_from'];
+  const AD_TYPE_VALUES = ['ad_click', 'ad_referral', 'ad'];
+  const POST_KEYS = ['post_id', 'post', 'comment_id', 'post_permalink'];
+  const LIVE_KEYS = ['has_livestream_order', 'is_livestream_order', 'live_video_id'];
   const COMMENT_HINTS = ['COMMENT', 'REPLY', 'POST_COMMENT'];
-  const LIVE_HINTS = ['LIVE', 'LIVESTREAM'];
 
   const LOG = (...a) => console.log('%c[lead-source]', 'color:#7c3aed;font-weight:600', ...a);
 
   // ======================================================================
-  // 2. PHÂN LOẠI (giống hệt tools/lead_source.py)
+  // 2. PHÂN LOẠI
   // ======================================================================
 
   function stripAccents(s) {
@@ -123,14 +129,21 @@
     });
     const typesList = Object.keys(msgTypes);
 
-    // --- 1. Quảng cáo
+    // ---- 1. Quảng cáo: attachments[].ad_id / type = ad_click
     let adHits = [];
-    const blobs = [['extra_info', conv.extra_info], ['conv', { post: conv.post, type: conv.type }], ['messages', msgs]];
+    const blobs = [['extra_info', conv.extra_info], ['messages', msgs]];
     blobs.forEach(([name, blob]) => {
       if (!blob) return;
       deepFind(blob, AD_KEYS).forEach(hit => {
         if (isEmptyish(hit.value)) return;
         adHits.push(name + '.' + hit.path + ' = ' + jsonify(hit.value));
+      });
+    });
+    msgs.forEach((m, i) => {
+      (m && m.attachments || []).forEach((a, j) => {
+        if (a && typeof a === 'object' && AD_TYPE_VALUES.indexOf(String(a.type || '').toLowerCase()) >= 0) {
+          adHits.push('messages[' + i + '].attachments[' + j + '].type = ' + a.type);
+        }
       });
     });
     adHits = adHits.filter((h, i) => !adHits.some((o, j) => j !== i && o.split(' = ')[0].indexOf(h.split(' = ')[0] + '.') === 0));
@@ -139,7 +152,7 @@
       evidence.push.apply(evidence, adHits.slice(0, 4));
     }
 
-    // --- 2. Bài viết
+    // ---- 2. Comment bài viết
     const postHits = [];
     deepFind({ extra_info: conv.extra_info, conv: { post_id: conv.post_id, post: conv.post } }, POST_KEYS)
       .forEach(hit => { if (!isEmptyish(hit.value)) postHits.push(hit.path + ' = ' + jsonify(hit.value)); });
@@ -147,20 +160,20 @@
       typesList.some(t => COMMENT_HINTS.some(h => t.indexOf(h) >= 0));
     if (postHits.length || isCommentType) {
       if (!source) { source = 'post'; confidence = postHits.length ? 'high' : 'mid'; }
-      else if (source === 'ads') evidence.push('(đồng thời có dấu hiệu comment)');
+      else evidence.push('(đồng thời có dấu hiệu comment)');
       evidence.push.apply(evidence, postHits.slice(0, 3));
       if (isCommentType) evidence.push('type = ' + (convType || typesList.join('/')) + ' → comment');
     }
 
-    // --- 3. Livestream
-    const liveOrder = !isEmptyish(conv.has_livestream_order);
-    const liveType = LIVE_HINTS.some(h => convType.indexOf(h) >= 0) || typesList.some(t => LIVE_HINTS.some(h => t.indexOf(h) >= 0));
-    if (liveOrder || liveType) {
+    // ---- 3. Livestream
+    const liveHits = deepFind({ conv: conv, messages: msgs }, LIVE_KEYS).filter(h => !isEmptyish(h.value));
+    const liveType = typesList.some(t => t.indexOf('LIVE') >= 0) || convType.indexOf('LIVE') >= 0;
+    if (liveHits.length || liveType) {
       if (!source) { source = 'live'; confidence = 'mid'; }
-      evidence.push(liveOrder ? 'has_livestream_order có giá trị' : 'type = ' + convType + ' → live');
+      if (liveHits.length) evidence.push(liveHits[0].path + ' = ' + jsonify(liveHits[0].value));
     }
 
-    // --- 4. Tag
+    // ---- 4. Tag: id (từ API) và tên (đọc từ dòng chat)
     const namedTags = [];
     (conv.tags || []).forEach(tid => {
       const info = CFG.tagMap[String(tid)];
@@ -169,13 +182,24 @@
       if (info.source && SOURCE_LABEL[info.source]) {
         if (!source) { source = info.source; confidence = 'mid'; }
         else if (info.source === source) { confidence = 'high'; }
-        evidence.push('tag #' + tid + ' = ' + (info.name || '?') + ' → nguồn ' + SOURCE_LABEL[info.source]);
+        evidence.push('tag #' + tid + ' = ' + (info.name || '?') + ' → ' + SOURCE_LABEL[info.source]);
       }
     });
+    (conv.domTags || []).forEach(rawName => {
+      const key = stripAccents(rawName);
+      let hit = null;
+      Object.keys(CFG.tagNameSource || {}).forEach(k => {
+        if (hit) return;
+        if (stripAccents(k) === key) hit = CFG.tagNameSource[k];
+      });
+      if (!hit || !SOURCE_LABEL[hit]) return;
+      if (!source) { source = hit; confidence = 'mid'; }
+      else if (hit === source) { confidence = 'high'; }
+      evidence.push('tag trên dòng chat: "' + rawName + '" → ' + SOURCE_LABEL[hit]);
+    });
     if (namedTags.length) evidence.push('tags: ' + namedTags.join(', '));
-    else if ((conv.tags || []).length) evidence.push('tags chưa map tên: ' + conv.tags.map(t => '#' + t).join(', '));
 
-    // --- 5. Mặc định
+    // ---- 5. Mặc định
     if (!source) {
       if (convType === '' || convType === 'INBOX') {
         source = 'organic'; confidence = 'low';
@@ -199,7 +223,6 @@
     const cust = (conv.customers && conv.customers[0]) || {};
     const from = conv.from || {};
     const name = cust.name || from.name || '(không tên)';
-    const psid = conv.from_psid || cust.fb_id || from.id || '';
     const phones = (conv.recent_phone_numbers || []).filter(p => typeof p === 'string' || typeof p === 'number');
     const updated = parseDate(conv.updated_at);
     const lastCust = parseDate(conv.last_customer_interactive_at);
@@ -234,7 +257,7 @@
     return {
       id: conv.id || '',
       name: name,
-      psid: String(psid || ''),
+      psid: String(conv.from_psid || cust.fb_id || '' || ''),
       phone: phones.length ? String(phones[0]) : '',
       pageId: String(conv.page_id || ''),
       pageName: (conv.last_sent_by && conv.last_sent_by.name) || '',
@@ -264,52 +287,82 @@
   if (typeof document === 'undefined') return;
 
   // ======================================================================
-  // 3. BẮT DỮ LIỆU: hook fetch + XHR của app
+  // 3. BẮT DỮ LIỆU (fetch + XHR)
+  //    - danh sách: POST /api/v1/conversations
+  //                 GET  /api/v1/pages/<page>/conversations
+  //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
+  const RE_LIST_GLOBAL = /\/api\/v1\/conversations(\?|$)/;
+  const RE_LIST_PAGE = /\/api\/v1\/pages\/[^/]+\/conversations(\?|$)/;
+  const RE_MESSAGES = /\/api\/v1\/(?:pages\/[^/]+\/)?conversations\/([^/?#]+)\/messages(\?|$)/;
+
   const state = {
-    convs: new Map(),          // id -> conversation
-    msgs: new Map(),           // id -> [message]
-    firstSeen: new Map(),      // id -> ts
-    listReq: null,             // {url, init} của request danh sách gần nhất
-    msgUrlTpl: null,           // mẫu URL .../conversations/<id>/messages
+    convs: new Map(),
+    msgs: new Map(),
+    firstSeen: new Map(),
+    listReqs: [],          // [{url, init, at}] tối đa 3
+    msgUrlTpl: null,
     lastSync: 0,
+    version: 0,
+    enriching: new Set(),
+    enrichTried: new Map(),
     errors: [],
   };
-  const CONV_LIST_RE = /\/api\/v1\/conversations(\?|$)/;
-  const CONV_MSGS_RE = /\/api\/v1\/conversations\/([^/?#]+)\/messages/;
 
   function noteError(msg) {
-    state.errors.push({ at: Date.now(), msg: String(msg).slice(0, 200) });
-    if (state.errors.length > 6) state.errors.shift();
-    scheduleRepaint();
+    state.errors.push({ at: Date.now(), msg: String(msg).slice(0, 160) });
+    if (state.errors.length > 5) state.errors.shift();
+    schedulePaint();
+  }
+
+  function isListUrl(u) { return RE_LIST_GLOBAL.test(u) || RE_LIST_PAGE.test(u); }
+  function isMsgUrl(u) { return RE_MESSAGES.test(u) && !isListUrl(u); }
+
+  function rememberListReq(url, init) {
+    if (!url) return;
+    const key = url.replace(/[?&](next_cursor|current_count)=[^&]*/g, '');
+    const found = state.listReqs.filter(r => r.key === key);
+    if (found.length) { found[0].at = Date.now(); found[0].url = url; found[0].init = init || found[0].init; }
+    else state.listReqs.push({ key: key, url: url, init: init || null, at: Date.now() });
+    state.listReqs = state.listReqs.slice(-3);
   }
 
   function ingestList(url, init, json) {
     const list = json && json.conversations;
     if (!Array.isArray(list)) return;
-    if (url) state.listReq = { url: url, init: init || null };
-    const nowTs = Date.now();
+    rememberListReq(url, init);
+    const ts = Date.now();
     list.forEach(c => {
       if (!c || !c.id) return;
-      if (!state.firstSeen.has(c.id)) state.firstSeen.set(c.id, nowTs);
+      if (!state.firstSeen.has(c.id)) state.firstSeen.set(c.id, ts);
       state.convs.set(c.id, c);
     });
-    if (state.firstSeen.size > 800) {
-      Array.from(state.firstSeen.keys()).slice(0, 300).forEach(k => state.firstSeen.delete(k));
+    // dọn bớt để không phình bộ nhớ
+    if (state.convs.size > 2500) {
+      const keys = Array.from(state.convs.keys()).slice(0, state.convs.size - 2000);
+      keys.forEach(k => state.convs.delete(k));
     }
-    state.lastSync = nowTs;
-    scheduleRepaint();
+    if (state.msgs.size > 400) {
+      Array.from(state.msgs.keys()).slice(0, state.msgs.size - 300).forEach(k => state.msgs.delete(k));
+    }
+    state.lastSync = ts;
+    state.version++;
+    scheduleDecor();
+    schedulePaint();
   }
 
   function ingestMessages(url, json) {
-    const m = CONV_MSGS_RE.exec(url || '');
+    const m = RE_MESSAGES.exec(url || '');
     if (!m) return;
     const id = decodeURIComponent(m[1]);
     const list = (json && (json.messages || json.data)) || [];
     if (!Array.isArray(list)) return;
     state.msgs.set(id, list);
     if (!state.msgUrlTpl) state.msgUrlTpl = url;
-    scheduleRepaint();
+    state.enriching.delete(id);
+    state.version++;
+    scheduleDecor();
+    schedulePaint();
   }
 
   const _fetch = window.fetch;
@@ -318,12 +371,12 @@
       const url = typeof input === 'string' ? input : ((input && input.url) || '');
       const p = _fetch.apply(this, arguments);
       try {
-        if (CONV_LIST_RE.test(url) || CONV_MSGS_RE.test(url)) {
+        if (isListUrl(url) || isMsgUrl(url)) {
           p.then(res => {
             let clone;
             try { clone = res.clone(); } catch (e) { return; }
             clone.json().then(j => {
-              if (CONV_MSGS_RE.test(url)) ingestMessages(url, j); else ingestList(url, init, j);
+              if (isMsgUrl(url)) ingestMessages(url, j); else ingestList(url, init, j);
             }).catch(() => {});
           }).catch(() => {});
         }
@@ -341,11 +394,11 @@
   XMLHttpRequest.prototype.send = function (body) {
     const xhr = this;
     const url = xhr.__lsUrl || '';
-    if (CONV_LIST_RE.test(url) || CONV_MSGS_RE.test(url)) {
+    if (isListUrl(url) || isMsgUrl(url)) {
       xhr.addEventListener('load', function () {
         try {
           const j = JSON.parse(xhr.responseText);
-          if (CONV_MSGS_RE.test(url)) ingestMessages(url, j);
+          if (isMsgUrl(url)) ingestMessages(url, j);
           else ingestList(url, { method: 'POST', body: body }, j);
         } catch (e) { /* ignore */ }
       });
@@ -354,57 +407,515 @@
   };
 
   // ======================================================================
-  // 4. TỰ POLL + ENRICH
+  // 4. POLL + ENRICH (chỉ cho hội thoại đang hiển thị)
   // ======================================================================
   function replayList() {
-    const req = state.listReq;
-    if (!req) return;
-    let init;
-    if (req.init && req.init.body) {
-      init = { method: req.init.method || 'POST', headers: req.init.headers || {}, body: req.init.body, credentials: 'include' };
-    } else {
-      const fd = new FormData();
-      fd.append('type', 'ALL,UNREAD');
-      init = { method: 'POST', body: fd, credentials: 'include' };
-    }
-    fetch(req.url, init)
-      .then(r => r.json())
-      .then(j => ingestList(req.url, req.init, j))
-      .catch(err => noteError('poll: ' + err.message));
+    const reqs = state.listReqs.filter(r => Date.now() - r.at < 10 * 60 * 1000).slice(-2);
+    reqs.forEach(req => {
+      let init;
+      if (req.init && req.init.body) {
+        init = { method: req.init.method || 'POST', headers: req.init.headers || {}, body: req.init.body, credentials: 'include' };
+      } else {
+        init = { method: 'GET', credentials: 'include' };
+      }
+      fetch(req.url, init)
+        .then(r => r.json())
+        .then(j => ingestList(req.url, req.init, j))
+        .catch(err => noteError('poll: ' + err.message));
+    });
   }
 
-  function enrich(convId) {
-    if (!convId || state.msgs.has(convId)) return;
-    let url;
+  function messagesUrl(conv) {
+    const convId = conv.id || '';
+    const pageId = conv.page_id || convId.split('_')[0] || '';
+    const custId = (conv.customers && conv.customers[0] && conv.customers[0].id) || '';
     if (state.msgUrlTpl) {
-      url = state.msgUrlTpl.replace(/\/conversations\/[^/?#]+\/messages/, '/conversations/' + encodeURIComponent(convId) + '/messages');
-    } else {
-      url = '/api/v1/conversations/' + encodeURIComponent(convId) + '/messages?page_number=1&limit=20';
+      let url = state.msgUrlTpl.replace(/\/conversations\/[^/?#]+\/messages/, '/conversations/' + encodeURIComponent(convId) + '/messages');
+      if (custId && /^[0-9a-f-]{30,}$/i.test(custId)) {
+        url = url.replace(/customer_id=[^&]*/, 'customer_id=' + encodeURIComponent(custId));
+      }
+      return url;
     }
+    const q = (custId && /^[0-9a-f-]{30,}$/i.test(custId)) ? '?customer_id=' + encodeURIComponent(custId) : '?';
+    return '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations/' + encodeURIComponent(convId) + '/messages' + q;
+  }
+
+  function enrich(conv) {
+    if (!conv || !conv.id) return;
+    const id = conv.id;
+    if (state.msgs.has(id) || state.enriching.has(id)) return;
+    const last = state.enrichTried.get(id);
+    if (last && Date.now() - last < CFG.enrichTTL) return;
+    state.enriching.add(id);
+    state.enrichTried.set(id, Date.now());
+    const url = messagesUrl(conv);
     fetch(url, { credentials: 'include' })
       .then(r => r.json())
       .then(j => ingestMessages(url, j))
-      .catch(err => noteError('enrich: ' + err.message));
+      .catch(err => { state.enriching.delete(id); noteError('enrich: ' + err.message); });
   }
 
-  function processEnrich() {
-    if (!CFG.autoEnrich) return;
-    const now = Date.now();
-    const pending = Array.from(state.convs.values())
-      .filter(c => !state.msgs.has(c.id))
-      .sort((a, b) => (now - (state.firstSeen.get(b.id) || 0)) - (now - (state.firstSeen.get(a.id) || 0)));
-    pending.slice(0, CFG.enrichLimit).forEach((c, i) => setTimeout(() => enrich(c.id), i * 900));
+  let enrichTimer = null;
+  function queueEnrich(convs) {
+    if (!CFG.enrichVisible || !convs.length) return;
+    if (enrichTimer) return;
+    const todo = convs.filter(c => c && c.id && !state.msgs.has(c.id) && !state.enriching.has(c.id)).slice(0, CFG.enrichLimit);
+    if (!todo.length) return;
+    enrichTimer = setTimeout(() => {
+      enrichTimer = null;
+      todo.forEach((c, i) => setTimeout(() => enrich(c), i * CFG.enrichSpacing));
+    }, 250);
   }
 
   function tick() {
     if (document.hidden) return;
     if (CFG.pollMs > 0) replayList();
-    processEnrich();
   }
 
   // ======================================================================
-  // 5. TIỆN ÍCH UI
+  // 5. ĐỌC DOM THẬT CỦA PANCAKE
+  //    .conversation-list > .conversation-list-item#<page>_<psid>__<n>
+  //      .name-module > .name-module-text > .name-text
+  //      .snippet-wrap > .snippet-line > .snippet-text
+  //      .conversation_tags_item
   // ======================================================================
+  const SEL_ROW = '.conversation-list-item';
+  const SEL_LIST = '.conversation-list';
+
+  function listContainer() {
+    return document.querySelector(SEL_LIST) || document.body;
+  }
+
+  /** Các dòng hội thoại ĐANG HIỂN THỊ trong khung nhìn. */
+  function visibleRows() {
+    const root = listContainer();
+    const all = root.querySelectorAll(SEL_ROW);
+    const vh = window.innerHeight || 800;
+    const out = [];
+    for (let i = 0; i < all.length; i++) {
+      const el = all[i];
+      let r;
+      try { r = el.getBoundingClientRect(); } catch (e) { continue; }
+      if (r.height > 0 && r.bottom > 0 && r.top < vh) out.push(el);
+    }
+    return out;
+  }
+
+  function convIdOf(row) {
+    const id = row && row.id;
+    if (!id) return null;
+    const m = /^(\d+_\d+)(?:__\d+)?$/.exec(id);
+    if (m) return m[1];
+    return /^\d+_\d+$/.test(id) ? id : null;
+  }
+
+  function convFromRow(row, convId) {
+    const txt = sel => { const n = row.querySelector(sel); return n ? n.textContent.trim() : ''; };
+    const tags = [];
+    row.querySelectorAll('.conversation_tags_item').forEach(t => tags.push(t.textContent.trim()));
+    const name = txt('.name-text') || txt('.name-module-text');
+    return {
+      id: convId,
+      page_id: convId.split('_')[0],
+      type: '',
+      snippet: txt('.snippet-text'),
+      tags: [],
+      domTags: tags,
+      customers: [{ fb_id: convId.split('_')[1] || '', id: '', name: name }],
+      from: { name: name },
+      from_psid: convId.split('_')[1] || '',
+      message_count: 0,
+      unread_count: row.classList.contains('unread') ? 1 : 0,
+      updated_at: '',
+      last_customer_interactive_at: '',
+      has_phone: false,
+      recent_phone_numbers: [],
+      _fromDom: true,
+    };
+  }
+
+  // ======================================================================
+  // 6. GẮN NHÃN
+  // ======================================================================
+  const chips = new Map();
+  let decorTimer = null;
+  let lastDecor = 0;
+
+  function chipText(lead, pending) {
+    const base = SOURCE_SHORT[lead.source] + ' ' + lead.score;
+    return (lead.prioKey === 'hot' ? '🔥 ' : '') + base + (pending ? '…' : '');
+  }
+
+  function chipTitle(lead, pending) {
+    return SOURCE_LABEL[lead.source] + ' · ' + lead.score + ' điểm · ' + lead.prio + ' · tin cậy ' + CONF_LABEL[lead.confidence] +
+      (pending ? '\n(đang xem tin nhắn để chắc chắn hơn)' : '') +
+      (lead.evidence.length ? '\n\nBằng chứng:\n• ' + lead.evidence.join('\n• ') : '') +
+      (lead.reasons.length ? '\n\nĐiểm:\n• ' + lead.reasons.join('\n• ') : '') +
+      '\n\n(Alt+O để ẩn/hiện)';
+  }
+
+  function makeChip(lead, pending) {
+    const chip = document.createElement('span');
+    chip.className = '__ls_chip';
+    chip.dataset.lsId = lead.id;
+    chip.dataset.lsSource = lead.source;
+    chip.textContent = chipText(lead, pending);
+    chip.title = chipTitle(lead, pending);
+    chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;' +
+      'background:' + SOURCE_COLOR[lead.source] + ';color:#fff;border-radius:999px;padding:0 5px;' +
+      'font-size:9.5px;font-weight:700;line-height:15px;height:15px;margin-left:5px;' +
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;vertical-align:middle;' +
+      'cursor:default;flex:0 0 auto;letter-spacing:.2px;white-space:nowrap;';
+    return chip;
+  }
+
+  function updateChip(chip, lead, pending) {
+    const t = chipText(lead, pending);
+    if (chip.textContent !== t) chip.textContent = t;
+    if (chip.dataset.lsSource !== lead.source) {
+      chip.dataset.lsSource = lead.source;
+      chip.style.background = SOURCE_COLOR[lead.source];
+    }
+    const title = chipTitle(lead, pending);
+    if (chip.title !== title) chip.title = title;
+  }
+
+  function decorate() {
+    if (!CFG.enabled || !CFG.showChips || document.hidden) return;
+    const rows = visibleRows();
+    if (!rows.length) return;
+    const now = Date.now();
+    const needEnrich = [];
+
+    rows.forEach(row => {
+      const convId = convIdOf(row);
+      if (!convId) return;
+      let conv = state.convs.get(convId);
+      if (!conv) conv = convFromRow(row, convId);
+      else if (row.classList.contains('unread') && !conv.unread_count) conv = Object.assign({}, conv, { unread_count: 1 });
+
+      const msgs = state.msgs.get(convId);
+      const lead = buildLead(conv, msgs || [], now);
+      const pending = !msgs && conv.type !== 'COMMENT' && !conv._fromDom;
+      if (pending && conv.type !== 'COMMENT') needEnrich.push(conv);
+
+      let chip = chips.get(convId);
+      if (chip && chip.parentElement && row.contains(chip)) { updateChip(chip, lead, pending); return; }
+      if (chip) chips.delete(convId);
+      chip = row.querySelector('.__ls_chip');
+      if (chip) { chips.set(convId, chip); updateChip(chip, lead, pending); return; }
+
+      const nameEl = row.querySelector('.name-text') || row.querySelector('.name-module-text');
+      if (!nameEl) return;
+      const c = makeChip(lead, pending);
+      try { nameEl.insertAdjacentElement('afterend', c); } catch (e) { return; }
+      chips.set(convId, c);
+    });
+
+    queueEnrich(needEnrich);
+  }
+
+  function scheduleDecor(force) {
+    if (decorTimer) return;
+    const wait = force ? 0 : Math.max(60, 400 - (Date.now() - lastDecor));
+    decorTimer = setTimeout(() => {
+      decorTimer = null;
+      lastDecor = Date.now();
+      try { decorate(); } catch (e) { LOG('decorate lỗi', e); }
+    }, wait);
+  }
+
+  function clearChips() {
+    document.querySelectorAll('.__ls_chip').forEach(el => el.remove());
+    chips.clear();
+  }
+
+  // ======================================================================
+  // 7. BẢNG NỔI
+  // ======================================================================
+  let host = null, shadow = null, fab = null;
+  let paintTimer = null, paintSig = '';
+
+  const CSS = `
+    :host { all: initial; }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+    .wrap { width: 372px; max-height: 74vh; display: flex; flex-direction: column;
+            background: #fff; border: 1px solid #e6e9f0; border-radius: 14px; overflow: hidden;
+            box-shadow: 0 12px 40px rgba(17,24,39,.16); font-size: 13px; color: #111827; }
+    .hd { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #eef0f5;
+          background: linear-gradient(180deg,#fbfcff,#f4f6fb); }
+    .hd .t { font-weight: 650; font-size: 12.5px; }
+    .hd .dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px #dcfce7; }
+    .hd .grow { flex: 1; }
+    .kbd { font-size: 9px; border: 1px solid #e6e9f0; border-radius: 5px; padding: 1px 4px; color: #9ca3af; background: #fff; }
+    .btn { border: 1px solid #e6e9f0; background: #fff; border-radius: 7px; padding: 2px 6px; font-size: 11.5px;
+           cursor: pointer; color: #374151; line-height: 1.4; }
+    .btn:hover { background: #eef1f7; }
+    .btn.on { background: #111827; color: #fff; border-color: #111827; }
+    .counts { display: flex; gap: 5px; padding: 7px 10px; flex-wrap: wrap; border-bottom: 1px solid #f2f4f8; }
+    .cnt { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #374151;
+           background: #f6f7fb; border: 1px solid #eceff5; border-radius: 999px; padding: 1px 7px; }
+    .cnt b { font-weight: 700; }
+    .cnt i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .list { overflow-y: auto; padding: 5px; }
+    .item { display: flex; gap: 7px; padding: 7px; border-radius: 9px; cursor: pointer; align-items: flex-start; }
+    .item:hover { background: #f7f8fd; }
+    .score { min-width: 32px; text-align: center; font-weight: 700; font-size: 14px; line-height: 1.15; }
+    .score small { display: block; font-size: 8.5px; font-weight: 700; text-transform: uppercase; }
+    .hot { color: #dc2626; } .warm { color: #d97706; } .cold { color: #6b7280; }
+    .mid { flex: 1; min-width: 0; }
+    .row1 { display: flex; align-items: center; gap: 5px; }
+    .badge { color: #fff; border-radius: 999px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
+    .nm { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sn { color: #6b7280; font-size: 11.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .meta { color: #9ca3af; font-size: 10.5px; margin-top: 2px; display: flex; gap: 7px; flex-wrap: wrap; }
+    .icon { border: none; background: transparent; cursor: pointer; font-size: 12px; padding: 1px 2px; border-radius: 5px; opacity: .5; }
+    .icon:hover { opacity: 1; background: #eef1f7; }
+    .legendBox { padding: 7px 10px; border-top: 1px solid #f2f4f8; background: #fcfdff;
+                 display: flex; flex-wrap: wrap; gap: 4px 9px; font-size: 10.5px; color: #4b5563; }
+    .sym { display: inline-flex; align-items: center; gap: 3px; }
+    .sym b { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 14px;
+             border-radius: 4px; color: #fff; font-size: 9px; font-weight: 700; padding: 0 3px; }
+    .ft { padding: 6px 10px; border-top: 1px solid #eef0f5; color: #9ca3af; font-size: 10.5px;
+          display: flex; justify-content: space-between; gap: 8px; }
+    .empty { padding: 16px 12px; color: #6b7280; font-size: 12px; line-height: 1.6; }
+    .collapsed .list, .collapsed .counts, .collapsed .ft, .collapsed .legendBox { display: none; }
+    .err { color: #b91c1c; }
+  `;
+
+  const FAB_CSS = `
+    button { width: 42px; height: 42px; border-radius: 50%; border: none; cursor: pointer;
+             background: #7c3aed; color: #fff; font-size: 17px; line-height: 1;
+             box-shadow: 0 8px 24px rgba(124,58,237,.38); }
+    button:hover { filter: brightness(1.08); }
+  `;
+
+  function ensureHost() {
+    if (host && document.contains(host)) return;
+    host = document.createElement('div');
+    host.id = '__lead_source_host';
+    host.style.cssText = 'position:fixed;z-index:2147483000;right:16px;bottom:16px;';
+    shadow = host.attachShadow({ mode: 'open' });
+    const st = document.createElement('style');
+    st.textContent = CSS;
+    const wrap = document.createElement('div');
+    wrap.className = 'wrap';
+    wrap.id = 'wrap';
+    shadow.appendChild(st);
+    shadow.appendChild(wrap);
+    document.documentElement.appendChild(host);
+    wrap.addEventListener('click', onPanelClick);
+  }
+
+  function ensureFab() {
+    if (fab && document.contains(fab)) return;
+    fab = document.createElement('div');
+    fab.id = '__lead_source_fab';
+    fab.style.cssText = 'position:fixed;z-index:2147483000;right:16px;bottom:16px;';
+    const sh = fab.attachShadow({ mode: 'open' });
+    const st = document.createElement('style');
+    st.textContent = FAB_CSS;
+    const b = document.createElement('button');
+    b.textContent = '🏷️';
+    b.title = 'Mở phân loại tệp khách (Alt+O)';
+    b.addEventListener('click', () => {
+      if (!CFG.enabled) setEnabled(true);
+      else { CFG.showPanel = true; saveCfg({ showPanel: true }); paint(true); }
+      syncFab();
+    });
+    sh.appendChild(st);
+    sh.appendChild(b);
+    document.documentElement.appendChild(fab);
+  }
+
+  function syncFab() {
+    const needFab = !CFG.enabled || !CFG.showPanel;
+    if (!needFab) { if (fab) fab.style.display = 'none'; return; }
+    ensureFab();
+    fab.style.display = '';
+    const b = fab.shadowRoot && fab.shadowRoot.querySelector('button');
+    if (b) {
+      b.textContent = CFG.enabled ? '▤' : '🏷️';
+      b.title = CFG.enabled ? 'Mở bảng tệp khách' : 'Bật phân loại tệp khách (Alt+O)';
+    }
+  }
+
+  function legendHtml() {
+    if (!CFG.showLegend) return '';
+    const sym = (code, color, label) =>
+      '<span class="sym"><b style="background:' + color + '">' + code + '</b>' + label + '</span>';
+    return '<div class="legendBox">' +
+      sym('QC', SOURCE_COLOR.ads, 'Quảng cáo') +
+      sym('BV', SOURCE_COLOR.post, 'Bài viết') +
+      sym('LV', SOURCE_COLOR.live, 'Livestream') +
+      sym('TN', SOURCE_COLOR.organic, 'Tự nhắn') +
+      sym('?', SOURCE_COLOR.unknown, 'Chưa rõ') +
+      sym('🔥', '#dc2626', 'Chốt ngay') +
+      '<span class="sym">… = chưa xem tin nhắn</span>' +
+      '</div>';
+  }
+
+  function itemHtml(r, pending) {
+    const conf = r.confidence === 'high' ? '' : ' · tin cậy ' + CONF_LABEL[r.confidence];
+    const tip = esc(r.evidence.join('\n') + (r.reasons.length ? '\n\n' + r.reasons.join('\n') : ''));
+    return '<div class="item" data-id="' + esc(r.id) + '" data-act="focus" title="' + tip + '">' +
+      '<div class="score ' + r.prioKey + '">' + r.score +
+      '<small>' + (r.prioKey === 'hot' ? 'CHỐT' : (r.prioKey === 'warm' ? 'ưu tiên' : 'theo dõi')) + '</small></div>' +
+      '<div class="mid"><div class="row1"><span class="badge" style="background:' + SOURCE_COLOR[r.source] + '">' +
+      SOURCE_SHORT[r.source] + '</span><span class="nm">' + esc(r.name) + '</span></div>' +
+      '<div class="sn">' + esc(r.snippet) + '</div>' +
+      '<div class="meta"><span>' + esc(r.pageName || '') + '</span><span>' + hhmm(r.updatedAt) + '</span>' +
+      (r.unread > 0 ? '<span style="color:#dc2626;font-weight:600">' + r.unread + ' chưa đọc</span>' : '') +
+      '<span>' + esc(SOURCE_LABEL[r.source]) + conf + (pending ? ' …' : '') + '</span></div></div>' +
+      '<div><button class="icon" data-act="focus" data-id="' + esc(r.id) + '" title="Tìm trong danh sách">🔍</button>' +
+      '<button class="icon" data-act="copy" data-id="' + esc(r.id) + '" title="Copy thông tin khách">📋</button></div></div>';
+  }
+
+  function paint(force) {
+    if (!CFG.enabled || !CFG.showPanel) { if (host) host.style.display = 'none'; syncFab(); return; }
+    ensureHost();
+    host.style.display = '';
+
+    const now = Date.now();
+    const all = [];
+    state.convs.forEach((c, id) => all.push(buildLead(c, state.msgs.get(id) || [], now)));
+    all.sort((a, b) => b.score - a.score);
+
+    const sig = state.version + '|' + all.length + '|' + all.slice(0, CFG.topN).map(r => r.id + r.score + r.source).join(',');
+    if (!force && sig === paintSig) return;
+    paintSig = sig;
+
+    const counts = { ads: 0, post: 0, live: 0, organic: 0, unknown: 0 };
+    all.forEach(r => { counts[r.source] = (counts[r.source] || 0) + 1; });
+    const hot = all.filter(r => r.prioKey === 'hot').length;
+
+    const wrap = shadow.getElementById('wrap');
+    if (!wrap) return;
+    const wasCollapsed = wrap.classList.contains('collapsed');
+    const prevList = shadow.querySelector('.list');
+    const scrollTop = prevList ? prevList.scrollTop : 0;
+
+    wrap.innerHTML =
+      '<div class="hd"><span class="dot"></span><span class="t">Tệp khách</span>' +
+      '<span class="cnt" style="padding:1px 6px"><b>' + all.length + '</b></span><span class="grow"></span>' +
+      '<span class="kbd">Alt+O</span>' +
+      '<button class="btn ' + (CFG.showLegend ? 'on' : '') + '" data-act="legend" title="Bảng kí hiệu">?</button>' +
+      '<button class="btn" data-act="hidePanel" title="Ẩn bảng, giữ nhãn trên dòng chat">▭</button>' +
+      '<button class="btn" data-act="collapse" title="Thu gọn">' + (wasCollapsed ? '▾' : '▴') + '</button>' +
+      '<button class="btn" data-act="off" title="Ẩn tất cả (Alt+O)">✕</button></div>' +
+      '<div class="counts">' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.ads + '"></i>Quảng cáo <b>' + counts.ads + '</b></span>' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.post + '"></i>Bài viết <b>' + counts.post + '</b></span>' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.live + '"></i>Live <b>' + counts.live + '</b></span>' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.organic + '"></i>Tự nhắn <b>' + counts.organic + '</b></span>' +
+      '<span class="cnt"><i style="background:#dc2626"></i>Chốt ngay <b>' + hot + '</b></span></div>' +
+      (all.length ? '<div class="list">' + all.slice(0, CFG.topN).map(r => itemHtml(r, !state.msgs.has(r.id))).join('') + '</div>'
+        : '<div class="empty">Chưa đọc được danh sách hội thoại.<br>Mở trang <b>Hội thoại</b> của Pancake — script tự đọc '
+          + 'dữ liệu và gắn nhãn cho các dòng đang hiển thị.</div>') +
+      legendHtml() +
+      '<div class="ft"><span>' + (state.lastSync ? 'đồng bộ ' + hhmm(new Date(state.lastSync).toISOString()) + ' trước' : 'chưa đồng bộ') + '</span>' +
+      '<span class="' + (state.errors.length ? 'err' : '') + '">' +
+      esc(state.errors.length ? state.errors[state.errors.length - 1].msg : (CFG.pollMs / 1000) + 's/lần') + '</span></div>';
+
+    if (wasCollapsed) wrap.classList.add('collapsed');
+    const newList = shadow.querySelector('.list');
+    if (newList && scrollTop) newList.scrollTop = scrollTop;
+    syncFab();
+  }
+
+  function schedulePaint() {
+    if (paintTimer) return;
+    paintTimer = setTimeout(() => {
+      paintTimer = null;
+      if (!CFG.enabled || !CFG.showPanel) return;
+      try { paint(); } catch (e) { LOG('paint lỗi', e); }
+    }, 700);
+  }
+
+  function onPanelClick(e) {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.getAttribute('data-act');
+    const id = btn.getAttribute('data-id');
+    if (act === 'collapse') {
+      const wrap = shadow.getElementById('wrap');
+      wrap.classList.toggle('collapsed');
+      btn.textContent = wrap.classList.contains('collapsed') ? '▾' : '▴';
+      return;
+    }
+    if (act === 'legend') {
+      CFG.showLegend = !CFG.showLegend;
+      saveCfg({ showLegend: CFG.showLegend });
+      paint(true);
+      return;
+    }
+    if (act === 'hidePanel') {
+      CFG.showPanel = false;
+      saveCfg({ showPanel: false });
+      paint(true);
+      return;
+    }
+    if (act === 'off') { setEnabled(false); return; }
+    if (!id) return;
+    const conv = state.convs.get(id) || { id: id };
+    if (act === 'copy') {
+      const lead = buildLead(conv, state.msgs.get(id) || [], Date.now());
+      navigator.clipboard.writeText(lead.name + ' | psid ' + lead.psid + ' | ' + lead.sourceLabel + ' | ' +
+        lead.score + ' điểm | ' + lead.snippet.replace(/\n/g, ' '))
+        .then(() => { btn.textContent = '✅'; setTimeout(() => { btn.textContent = '📋'; }, 1200); })
+        .catch(() => {});
+      return;
+    }
+    if (act === 'focus') focusInList(conv);
+  }
+
+  function focusInList(conv) {
+    if (!conv || !conv.id) return;
+    const chip = document.querySelector('.__ls_chip[data-ls-id="' + cssEscape(conv.id) + '"]');
+    const row = (chip && chip.closest(SEL_ROW)) || document.getElementById(conv.id) ||
+      document.querySelector('[id^="' + cssEscape(conv.id) + '__"]');
+    if (!row) { LOG('Không thấy dòng của', conv.id, '— cuộn danh sách hoặc đổi bộ lọc.'); return; }
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const old = row.style.boxShadow;
+    row.style.boxShadow = '0 0 0 2px #7c3aed inset';
+    setTimeout(() => { row.style.boxShadow = old; }, 1400);
+  }
+
+  // ======================================================================
+  // 8. BẬT / TẮT
+  //    Alt+O hoặc ✕  : ẩn/hiện TẤT CẢ (panel + nhãn). Nút 🏷️ vẫn còn để bật lại.
+  //    ▭             : chỉ ẩn panel, nhãn trên dòng chat vẫn cập nhật.
+  //    Dữ liệu + enrich LUÔN chạy, kể cả khi đã ẩn -> bật lại là có ngay.
+  // ======================================================================
+  function setEnabled(on) {
+    CFG.enabled = !!on;
+    saveCfg({ enabled: CFG.enabled });
+    if (!CFG.enabled) {
+      if (host) host.style.display = 'none';
+      clearChips();
+    } else {
+      ensureHost();
+      host.style.display = '';
+      paint(true);
+      scheduleDecor(true);
+    }
+    syncFab();
+    return CFG.enabled;
+  }
+
+  function onKeydown(e) {
+    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    const k = (e.key || '').toLowerCase();
+    if (k !== 'o' && e.code !== 'KeyO') return;
+    e.preventDefault();
+    e.stopPropagation();
+    setEnabled(!CFG.enabled);
+    LOG(CFG.enabled ? 'đã bật' : 'đã ẩn (Alt+O để bật lại)');
+  }
+
+  document.addEventListener('keydown', onKeydown, true);
+
   function cssEscape(v) {
     if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') return CSS.escape(v);
     return String(v).replace(/[^a-zA-Z0-9_-]/g, c => '\\' + c);
@@ -431,426 +942,46 @@
     } catch (e) { /* ignore */ }
   }
 
-  function leads(now) {
-    const out = [];
-    state.convs.forEach(c => out.push(buildLead(c, state.msgs.get(c.id) || [], now)));
-    return out.sort((a, b) => b.score - a.score);
-  }
-
   // ======================================================================
-  // 6. BẢNG NỔI
+  // 9. VÒNG QUAN SÁT (nhẹ)
   // ======================================================================
-  let host = null;
-  let shadow = null;
-  let fab = null;
-  let repaintTimer = null;
+  let mo = null;
+  let moTarget = null;
 
-  const CSS = `
-    :host { all: initial; }
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    .wrap { width: 384px; max-height: 76vh; display: flex; flex-direction: column;
-            background: #fff; border: 1px solid #e6e9f0; border-radius: 14px; overflow: hidden;
-            box-shadow: 0 12px 40px rgba(17,24,39,.18); font-size: 13px; color: #111827; }
-    .hd { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border-bottom: 1px solid #eef0f5;
-          background: linear-gradient(180deg,#fbfcff,#f4f6fb); }
-    .hd .t { font-weight: 650; font-size: 13px; letter-spacing: -.1px; }
-    .hd .dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px #dcfce7; }
-    .hd .grow { flex: 1; }
-    .kbd { font-size: 9.5px; border: 1px solid #e6e9f0; border-radius: 5px; padding: 1px 4px; color: #9ca3af; background: #fff; }
-    .btn { border: 1px solid #e6e9f0; background: #fff; border-radius: 8px; padding: 3px 7px; font-size: 12px;
-           cursor: pointer; color: #374151; line-height: 1.3; }
-    .btn:hover { background: #eef1f7; }
-    .btn.on { background: #111827; color: #fff; border-color: #111827; }
-    .counts { display: flex; gap: 6px; padding: 8px 11px; flex-wrap: wrap; border-bottom: 1px solid #f2f4f8; }
-    .cnt { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #374151;
-           background: #f6f7fb; border: 1px solid #eceff5; border-radius: 999px; padding: 2px 8px; }
-    .cnt b { font-weight: 700; }
-    .cnt i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-    .list { overflow-y: auto; padding: 6px; }
-    .item { display: flex; gap: 8px; padding: 8px; border-radius: 10px; cursor: pointer; align-items: flex-start; }
-    .item:hover { background: #f7f8fd; }
-    .score { min-width: 34px; text-align: center; font-weight: 700; font-size: 15px; line-height: 1.15; }
-    .score small { display: block; font-size: 9px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
-    .hot { color: #dc2626; } .warm { color: #d97706; } .cold { color: #6b7280; }
-    .mid { flex: 1; min-width: 0; }
-    .row1 { display: flex; align-items: center; gap: 6px; }
-    .badge { display: inline-flex; align-items: center; gap: 4px; color: #fff; border-radius: 999px;
-             padding: 1px 7px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
-    .nm { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sn { color: #6b7280; font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .meta { color: #9ca3af; font-size: 11px; margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
-    .acts { display: flex; gap: 4px; }
-    .icon { border: none; background: transparent; cursor: pointer; font-size: 13px; padding: 2px 3px; border-radius: 6px; opacity: .55; }
-    .icon:hover { opacity: 1; background: #eef1f7; }
-    .legendBox { padding: 8px 11px; border-top: 1px solid #f2f4f8; background: #fcfdff;
-                 display: flex; flex-wrap: wrap; gap: 5px 10px; font-size: 11px; color: #4b5563; }
-    .sym { display: inline-flex; align-items: center; gap: 4px; }
-    .sym b { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 15px;
-             border-radius: 4px; color: #fff; font-size: 9.5px; font-weight: 700; padding: 0 4px; }
-    .ft { padding: 7px 11px; border-top: 1px solid #eef0f5; color: #9ca3af; font-size: 11px;
-          display: flex; justify-content: space-between; gap: 8px; }
-    .empty { padding: 18px 14px; color: #6b7280; font-size: 12.5px; line-height: 1.6; }
-    .collapsed .list, .collapsed .counts, .collapsed .ft, .collapsed .legendBox { display: none; }
-    .err { color: #b91c1c; }
-  `;
-
-  const FAB_CSS = `
-    button { width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
-             background: #7c3aed; color: #fff; font-size: 19px; line-height: 1;
-             box-shadow: 0 8px 24px rgba(124,58,237,.4); display: flex; align-items: center; justify-content: center; }
-    button:hover { filter: brightness(1.08); }
-  `;
-
-  function ensureHost() {
-    if (host && document.contains(host)) return;
-    host = document.createElement('div');
-    host.id = '__lead_source_host';
-    host.style.cssText = 'position:fixed;z-index:2147483000;right:16px;bottom:16px;';
-    shadow = host.attachShadow({ mode: 'open' });
-    const style = document.createElement('style');
-    style.textContent = CSS;
-    const wrap = document.createElement('div');
-    wrap.className = 'wrap';
-    wrap.id = 'wrap';
-    shadow.appendChild(style);
-    shadow.appendChild(wrap);
-    document.documentElement.appendChild(host);
-    wrap.addEventListener('click', onPanelClick);
+  function attachObserver() {
+    const target = listContainer();
+    if (mo && moTarget === target && document.contains(target)) return;
+    if (!mo) mo = new MutationObserver(() => scheduleDecor());
+    if (moTarget) { try { mo.disconnect(); } catch (e) { /* ignore */ } }
+    moTarget = target;
+    mo.observe(target, { childList: true, subtree: true });
   }
 
-  function ensureFab() {
-    if (fab && document.contains(fab)) return;
-    fab = document.createElement('div');
-    fab.id = '__lead_source_fab';
-    fab.style.cssText = 'position:fixed;z-index:2147483000;right:16px;bottom:16px;';
-    const sh = fab.attachShadow({ mode: 'open' });
-    const st = document.createElement('style');
-    st.textContent = FAB_CSS;
-    const b = document.createElement('button');
-    b.textContent = '🏷️';
-    b.title = 'Bật phân loại tệp khách (Alt+O)';
-    b.setAttribute('aria-label', 'Bật phân loại tệp khách');
-    b.addEventListener('click', () => setEnabled(true));
-    sh.appendChild(st);
-    sh.appendChild(b);
-    document.documentElement.appendChild(fab);
+  let scrollTimer = null;
+  function onScroll() {
+    if (scrollTimer) return;
+    scrollTimer = setTimeout(() => { scrollTimer = null; scheduleDecor(true); }, 120);
+  }
+  document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+
+  function start() {
+    attachObserver();
+    scheduleDecor(true);
+    paint(true);
+    syncFab();
   }
 
-  function legendHtml() {
-    if (!CFG.showLegend) return '';
-    const sym = (code, color, label) =>
-      '<span class="sym"><b style="background:' + color + '">' + code + '</b>' + label + '</span>';
-    return '<div class="legendBox">' +
-      sym('QC', SOURCE_COLOR.ads, 'Quảng cáo') +
-      sym('BV', SOURCE_COLOR.post, 'Bài viết') +
-      sym('LV', SOURCE_COLOR.live, 'Livestream') +
-      sym('TN', SOURCE_COLOR.organic, 'Tự nhắn') +
-      sym('?', SOURCE_COLOR.unknown, 'Chưa rõ') +
-      sym('🔥', '#dc2626', 'Chốt ngay ≥70') +
-      '<span class="sym">Ưu tiên 40–69</span>' +
-      '<span class="sym">Theo dõi &lt;40</span>' +
-      '</div>';
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
 
-  function itemHtml(r, fetched) {
-    const color = SOURCE_COLOR[r.source];
-    const conf = r.confidence === 'high' ? '' : ' · tin cậy ' + CONF_LABEL[r.confidence];
-    const tip = esc(r.evidence.join('\n') + (r.reasons.length ? '\n\n' + r.reasons.join('\n') : ''));
-    return '<div class="item" data-id="' + esc(r.id) + '" data-act="focus" title="' + tip + '">' +
-      '<div class="score ' + r.prioKey + '">' + r.score +
-      '<small>' + (r.prioKey === 'hot' ? 'CHỐT' : (r.prioKey === 'warm' ? 'ưu tiên' : 'theo dõi')) + '</small></div>' +
-      '<div class="mid">' +
-      '<div class="row1"><span class="badge" style="background:' + color + '">' + SOURCE_SHORT[r.source] + '</span>' +
-      '<span class="nm">' + esc(r.name) + '</span></div>' +
-      '<div class="sn">' + esc(r.snippet) + '</div>' +
-      '<div class="meta"><span>' + esc(r.pageName || '') + '</span><span>' + hhmm(r.updatedAt) + '</span>' +
-      (r.unread > 0 ? '<span style="color:#dc2626;font-weight:600">' + r.unread + ' chưa đọc</span>' : '') +
-      (r.phone ? '<span>' + esc(r.phone) + '</span>' : '') +
-      '<span>' + esc(SOURCE_LABEL[r.source]) + conf + '</span></div>' +
-      '</div>' +
-      '<div class="acts">' +
-      '<button class="icon" data-act="focus" data-id="' + esc(r.id) + '" title="Tìm trong danh sách">🔍</button>' +
-      '<button class="icon" data-act="copy" data-id="' + esc(r.id) + '" title="Copy thông tin khách">📋</button>' +
-      (fetched ? '' : '<button class="icon" data-act="enrich" data-id="' + esc(r.id) + '" title="Xem tin nhắn để phân loại chính xác hơn">↻</button>') +
-      '</div></div>';
-  }
-
-  function paint() {
-    if (!CFG.enabled) return;
-    if (!CFG.showPanel) { if (host) host.style.display = 'none'; return; }
-    ensureHost();
-    host.style.display = '';
-    const wrap = shadow.getElementById('wrap');
-    if (!wrap) return;
-    const all = leads(Date.now());
-    const counts = { ads: 0, post: 0, live: 0, organic: 0, unknown: 0 };
-    all.forEach(r => { counts[r.source] = (counts[r.source] || 0) + 1; });
-    const hot = all.filter(r => r.prioKey === 'hot').length;
-    const list = all.slice(0, CFG.topN);
-    const wasCollapsed = wrap.classList.contains('collapsed');
-    const prevList = shadow.querySelector('.list');
-    const scrollTop = prevList ? prevList.scrollTop : 0;
-
-    wrap.innerHTML =
-      '<div class="hd"><span class="dot"></span><span class="t">Tệp khách</span>' +
-      '<span class="cnt" style="padding:1px 7px"><b>' + all.length + '</b></span>' +
-      '<span class="grow"></span>' +
-      '<span class="kbd">Alt+O</span>' +
-      '<button class="btn ' + (CFG.showLegend ? 'on' : '') + '" data-act="legend" title="Bật/tắt bảng kí hiệu">?</button>' +
-      '<button class="btn" data-act="collapse" title="Thu gọn">' + (wasCollapsed ? '▾' : '▴') + '</button>' +
-      '<button class="btn" data-act="off" title="Ẩn giao diện (Alt+O)">✕</button></div>' +
-      '<div class="counts">' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.ads + '"></i>Quảng cáo <b>' + counts.ads + '</b></span>' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.post + '"></i>Bài viết <b>' + counts.post + '</b></span>' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.live + '"></i>Live <b>' + counts.live + '</b></span>' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.organic + '"></i>Tự nhắn <b>' + counts.organic + '</b></span>' +
-      '<span class="cnt"><i style="background:#dc2626"></i>Chốt ngay <b>' + hot + '</b></span>' +
-      '</div>' +
-      (list.length ? '<div class="list">' + list.map(r => itemHtml(r, state.msgs.has(r.id))).join('') + '</div>'
-        : '<div class="empty">Chưa bắt được danh sách hội thoại.<br>Mở trang <b>Hội thoại / multi_pages</b> của Pancake, ' +
-          'script sẽ tự đọc dữ liệu và gắn nhãn (không cần mở từng đoạn chat).</div>') +
-      legendHtml() +
-      '<div class="ft"><span>' + (state.lastSync ? 'đồng bộ ' + hhmm(new Date(state.lastSync).toISOString()) + ' trước' : 'chưa đồng bộ') + '</span>' +
-      '<span class="' + (state.errors.length ? 'err' : '') + '">' + (state.errors.length ? esc(state.errors[state.errors.length - 1].msg) : 'poll ' + (CFG.pollMs / 1000) + 's') + '</span></div>';
-
-    if (wasCollapsed) wrap.classList.add('collapsed');
-    const newList = shadow.querySelector('.list');
-    if (newList && scrollTop) newList.scrollTop = scrollTop;
-  }
-
-  function onPanelClick(e) {
-    const btn = e.target.closest('[data-act]');
-    if (!btn) return;
-    const act = btn.getAttribute('data-act');
-    const id = btn.getAttribute('data-id');
-    if (act === 'collapse') {
-      const wrap = shadow.getElementById('wrap');
-      wrap.classList.toggle('collapsed');
-      btn.textContent = wrap.classList.contains('collapsed') ? '▾' : '▴';
-      return;
-    }
-    if (act === 'legend') {
-      CFG.showLegend = !CFG.showLegend;
-      saveCfg({ showLegend: CFG.showLegend });
-      paint();
-      return;
-    }
-    if (act === 'off') { setEnabled(false); return; }
-    if (!id) return;
-    const conv = state.convs.get(id);
-    if (act === 'copy') {
-      const lead = buildLead(conv, state.msgs.get(id) || [], Date.now());
-      const text = lead.name + ' | psid ' + lead.psid + ' | ' + lead.sourceLabel + ' | ' + lead.score + ' điểm | ' +
-        lead.snippet.replace(/\n/g, ' ');
-      navigator.clipboard.writeText(text).then(() => {
-        btn.textContent = '✅';
-        setTimeout(() => { btn.textContent = '📋'; }, 1200);
-      }).catch(() => {});
-      return;
-    }
-    if (act === 'enrich') { enrich(id); btn.style.opacity = '.3'; return; }
-    if (act === 'focus') focusInList(conv);
-  }
-
-  // ======================================================================
-  // 7. GẮN NHÃN TRỰC TIẾP LÊN TỪNG DÒNG HỘI THOẠI
-  // ======================================================================
-  const chips = new Map();   // convId -> element
-  let nameIndex = null;
-  let lastDecorate = 0;
-
-  function chipText(lead) {
-    const base = SOURCE_SHORT[lead.source] + ' ' + lead.score;
-    const unsure = (lead.confidence === 'low' && lead.source !== 'organic' && lead.source !== 'unknown') ? '?' : '';
-    return (lead.prioKey === 'hot' ? '🔥 ' : '') + base + unsure;
-  }
-
-  function chipTitle(lead) {
-    return SOURCE_LABEL[lead.source] + ' · ' + lead.score + ' điểm · ' + lead.prio + ' · tin cậy ' + CONF_LABEL[lead.confidence] +
-      (lead.evidence.length ? '\n\nBằng chứng:\n• ' + lead.evidence.join('\n• ') : '') +
-      (lead.reasons.length ? '\n\nĐiểm:\n• ' + lead.reasons.join('\n• ') : '') +
-      '\n\n(Alt+O để ẩn/hiện)';
-  }
-
-  function buildNameIndex() {
-    const index = new Map();
-    const nodes = document.querySelectorAll('span,div,a,p,b,strong,h4');
-    for (let i = 0; i < nodes.length; i++) {
-      const el = nodes[i];
-      if (el.childElementCount) continue;
-      if (el.classList && (el.classList.contains('__ls_chip') || el.closest('#__lead_source_host, #__lead_source_fab'))) continue;
-      if (el.offsetParent === null) continue;
-      const t = (el.textContent || '').trim();
-      if (!t || t.length > 48) continue;
-      if (!index.has(t)) index.set(t, el);
-    }
-    return index;
-  }
-
-  function findNameNode(name) {
-    if (!name) return null;
-    if (!nameIndex) nameIndex = buildNameIndex();
-    let el = nameIndex.get(name);
-    if (el && document.contains(el)) return el;
-    // tên có thể bị React đổi cấu trúc -> dò mềm theo tiền tố
-    const key = String(name).trim().toLowerCase();
-    for (const [text, node] of nameIndex) {
-      const t = text.toLowerCase();
-      if (t === key || (t.length > 4 && (key.indexOf(t) === 0 || t.indexOf(key) === 0))) return node;
-    }
-    return null;
-  }
-
-  function findRowEl(node) {
-    let el = node;
-    for (let i = 0; i < 6 && el && el !== document.body; i++) {
-      const r = el.getBoundingClientRect();
-      let cur = '';
-      try { cur = getComputedStyle(el).cursor; } catch (e) { /* ignore */ }
-      const cls = String(el.className || '');
-      if (r.height >= 34 && (cur === 'pointer' || el.getAttribute('role') === 'button' ||
-        /(^|[-_ ])(row|item|conversation|thread|conv)/i.test(cls))) return el;
-      el = el.parentElement;
-    }
-    return node.parentElement;
-  }
-
-  function makeChip(lead) {
-    const chip = document.createElement('span');
-    chip.className = '__ls_chip';
-    chip.dataset.lsId = lead.id;
-    chip.dataset.lsSource = lead.source;
-    chip.textContent = chipText(lead);
-    chip.title = chipTitle(lead);
-    chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;' +
-      'background:' + SOURCE_COLOR[lead.source] + ';color:#fff;border-radius:999px;padding:0 6px;' +
-      'font-size:10px;font-weight:700;line-height:16px;height:16px;margin-left:6px;' +
-      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;vertical-align:middle;' +
-      'cursor:default;flex:0 0 auto;letter-spacing:.2px;white-space:nowrap;';
-    return chip;
-  }
-
-  function updateChip(chip, lead) {
-    const text = chipText(lead);
-    if (chip.textContent !== text) chip.textContent = text;
-    if (chip.dataset.lsSource !== lead.source) {
-      chip.dataset.lsSource = lead.source;
-      chip.style.background = SOURCE_COLOR[lead.source];
-    }
-    const title = chipTitle(lead);
-    if (chip.title !== title) chip.title = title;
-  }
-
-  /** Gắn / cập nhật nhãn cho mọi hội thoại đang có trong DOM. */
-  function decorate() {
-    if (!CFG.enabled || !CFG.showChips || document.hidden) return;
-    const now = Date.now();
-    if (now - lastDecorate < 400) return;
-    lastDecorate = now;
-    nameIndex = null;
-
-    state.convs.forEach(conv => {
-      const lead = buildLead(conv, state.msgs.get(conv.id) || [], now);
-
-      // 1) đã có nhãn và còn trong DOM -> chỉ cập nhật
-      const existing = chips.get(conv.id);
-      if (existing && document.contains(existing)) { updateChip(existing, lead); return; }
-      if (existing) chips.delete(conv.id);
-
-      // 2) còn nhãn mồ côi do React render lại
-      const orphan = document.querySelector('.__ls_chip[data-ls-id="' + cssEscape(conv.id) + '"]');
-      if (orphan) { chips.set(conv.id, orphan); updateChip(orphan, lead); return; }
-
-      // 3) chưa có -> tìm dòng và chèn
-      const nameNode = findNameNode(lead.name);
-      if (!nameNode) return;
-      const chip = makeChip(lead);
-      try { nameNode.insertAdjacentElement('afterend', chip); } catch (e) { return; }
-      chips.set(conv.id, chip);
-    });
-  }
-
-  function clearChips() {
-    document.querySelectorAll('.__ls_chip').forEach(el => el.remove());
-    chips.clear();
-    nameIndex = null;
-  }
-
-  function focusInList(conv) {
-    if (!conv) return;
-    const lead = buildLead(conv, state.msgs.get(conv.id) || [], Date.now());
-    const chip = document.querySelector('.__ls_chip[data-ls-id="' + cssEscape(conv.id) + '"]');
-    const target = chip || findNameNode(lead.name);
-    if (!target) { LOG('Không thấy dòng của', lead.name, '— thử cuộn danh sách hoặc lọc theo nguồn.'); return; }
-    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    const row = findRowEl(target);
-    const old = row.style.boxShadow;
-    row.style.boxShadow = '0 0 0 2px ' + SOURCE_COLOR[lead.source] + ' inset';
-    setTimeout(() => { row.style.boxShadow = old; }, 1400);
-  }
-
-  // ======================================================================
-  // 8. BẬT / TẮT  (Alt+O, nút ✕, FAB 🏷️)
-  // ======================================================================
-  function setEnabled(on) {
-    CFG.enabled = !!on;
-    saveCfg({ enabled: CFG.enabled });
-    if (!CFG.enabled) {
-      if (host) host.style.display = 'none';
-      clearChips();
-      ensureFab();
-      fab.style.display = '';
-    } else {
-      if (fab) fab.style.display = 'none';
-      ensureHost();
-      host.style.display = '';
-      paint();
-      lastDecorate = 0;
-      decorate();
-    }
-    return CFG.enabled;
-  }
-
-  function onKeydown(e) {
-    if (!e.altKey || e.ctrlKey || e.metaKey) return;
-    const k = (e.key || '').toLowerCase();
-    if (k !== 'o' && e.code !== 'KeyO') return;
-    e.preventDefault();
-    e.stopPropagation();
-    setEnabled(!CFG.enabled);
-    LOG(CFG.enabled ? 'đã bật giao diện' : 'đã ẩn giao diện (Alt+O để bật lại, hoặc bấm nút 🏷️)');
-  }
-
-  document.addEventListener('keydown', onKeydown, true);
-
-  function scheduleRepaint() {
-    if (repaintTimer) return;
-    repaintTimer = setTimeout(() => {
-      repaintTimer = null;
-      if (!CFG.enabled) return;
-      try { paint(); } catch (e) { LOG('paint lỗi', e); }
-      try { decorate(); } catch (e) { LOG('decorate lỗi', e); }
-    }, 200);
-  }
-
-  // React vẽ lại danh sách -> gắn lại nhãn; đồng thời quét định kỳ cho list ảo hoá
-  const mo = new MutationObserver(() => scheduleRepaint());
-  function startObserver() {
-    mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startObserver, { once: true });
-  else startObserver();
-
-  // ======================================================================
-  // 9. KHỞI ĐỘNG
-  // ======================================================================
-  setTimeout(tick, 1500);
-  setInterval(tick, Math.max(5000, CFG.pollMs || 20000));
-  setInterval(() => { if (CFG.enabled) { try { decorate(); } catch (e) { /* ignore */ } } }, Math.max(600, CFG.tickMs));
-
-  if (CFG.enabled) setTimeout(() => { paint(); decorate(); }, 800);
-  else { ensureFab(); }
+  setTimeout(tick, 1200);
+  setInterval(tick, Math.max(8000, CFG.pollMs || 25000));
+  setInterval(() => {                     // quét dự phòng + gắn lại observer nếu Pancake render lại
+    if (document.hidden || !CFG.enabled) return;
+    attachObserver();
+    scheduleDecor(true);
+  }, Math.max(800, CFG.scanMs));
+  setInterval(() => { if (CFG.enabled && CFG.showPanel) schedulePaint(); }, 3000);
 
   // ======================================================================
   // 10. API console
@@ -858,32 +989,35 @@
   window.__leadSource = {
     cfg: CFG,
     state: state,
-    get leads() { return leads(Date.now()); },
     get visible() { return !!CFG.enabled; },
-    toggle: function () { return setEnabled(!CFG.enabled); },
-    show: function () { return setEnabled(true); },
-    hide: function () { return setEnabled(false); },
-    refresh: tick,
-    reload: () => { state.convs.clear(); chips.clear(); tick(); },
+    get leads() {
+      const now = Date.now(), out = [];
+      state.convs.forEach((c, id) => out.push(buildLead(c, state.msgs.get(id) || [], now)));
+      return out.sort((a, b) => b.score - a.score);
+    },
+    get visibleRows() { return visibleRows().map(convIdOf).filter(Boolean); },
+    toggle: () => setEnabled(!CFG.enabled),
+    show: () => setEnabled(true),
+    hide: () => setEnabled(false),
+    refresh: () => { scheduleDecor(true); schedulePaint(); tick(); },
+    reload: () => { state.convs.clear(); state.msgs.clear(); clearChips(); tick(); paint(true); },
     classify: classify,
     buildLead: buildLead,
-    decorate: decorate,
-    /** đổi cấu hình: __leadSource.set({tagMap:{'83':{name:'Từ quảng cáo',source:'ads'}}}) */
     set: function (patch) {
       Object.assign(CFG, patch);
       saveCfg(patch);
       if ('enabled' in patch) setEnabled(patch.enabled);
-      else scheduleRepaint();
+      else { paint(true); scheduleDecor(true); }
       return CFG;
     },
     help: function () {
-      LOG('Alt+O  = ẩn/hiện giao diện (hoặc bấm nút 🏷️ / ✕)' +
-        '\nMap tag:      __leadSource.set({tagMap: {"83": {name:"Từ quảng cáo", source:"ads"}}})' +
-        '\nChu kỳ poll:  __leadSource.set({pollMs: 10000})' +
-        '\nBảng kí hiệu: __leadSource.set({showLegend: false})' +
-        '\nDữ liệu thô:  __leadSource.state.convs');
+      LOG('Alt+O  = ẩn/hiện tất cả · ▭ = chỉ ẩn bảng · 🏷️/▤ = mở lại' +
+        '\nChỉ xem tin nhắn của dòng đang hiển thị:  __leadSource.set({enrichVisible: false}) để tắt' +
+        '\nMap tag id:  __leadSource.set({tagMap: {"83": {name:"Từ quảng cáo", source:"ads"}}})' +
+        '\nMap tên tag trên dòng chat:  __leadSource.set({tagNameSource: {"QC": "ads", "LIVE": "live"}})' +
+        '\nNhịp quét:   __leadSource.set({scanMs: 2000, pollMs: 30000})');
     },
   };
 
-  LOG('đã bật (v2). Alt+O để ẩn/hiện · __leadSource.help() để xem cấu hình');
+  LOG('v3 đã bật · Alt+O ẩn/hiện · chỉ xử lý các dòng đang hiển thị · __leadSource.help()');
 })();
