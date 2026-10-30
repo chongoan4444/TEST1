@@ -28,33 +28,23 @@ nên **hội thoại vừa hiện ra trong danh sách là có nhãn ngay**.
 
 Bạn sẽ thấy:
 
-- **Bảng nổi góc phải**: tổng số tệp khách, số khách theo từng nguồn, danh sách xếp theo điểm ưu tiên
-  (`CHỐT / ưu tiên / theo dõi`). Bấm 🔍 để nhảy tới dòng đó, 📋 để copy `tên | psid | nguồn | điểm`.
-- **Nhãn nhỏ cạnh tên khách** trong danh sách: `QC 90` (quảng cáo), `BV 85` (bài viết), `LV 50` (live),
-  `TN 30` (tự nhắn), `? 20` (chưa rõ). Di chuột vào nhãn để xem **bằng chứng** đã dùng để phân loại.
-- Hội thoại mới → tự poll 20 giây/lần, có nhãn ngay, không cần F5.
+- **Nhãn ngay trên từng dòng hội thoại**, cập nhật liên tục khi có chat mới load vào:
+  `🔥 QC 90` (quảng cáo, nên chốt ngay) · `BV 85` (bài viết) · `LV 50` (live) · `TN 30` (tự nhắn) · `? 20` (chưa rõ).
+  Rê chuột vào nhãn → xem **bằng chứng** đã dùng để phân loại + lý do có điểm đó.
+- **Bảng nổi góc phải**: đếm theo từng nguồn, danh sách xếp theo điểm, 🔍 nhảy tới dòng, 📋 copy
+  `tên | psid | nguồn | điểm`, ↻ xem tin nhắn để phân loại chính xác hơn.
+- **Bảng kí hiệu** ngay trong panel (nút `?` để bật/tắt): QC / BV / LV / TN / ? / 🔥 / Ưu tiên / Theo dõi.
 
-Cấu hình trong console (F12) — lưu vào `localStorage`, không cần sửa script:
+**Bật / tắt giao diện:**
 
-```js
-__leadSource.help()                                              // hướng dẫn
-__leadSource.set({ tagMap: { "83": { name: "Từ quảng cáo", source: "ads" } } })
-__leadSource.set({ pollMs: 10000, autoEnrich: true })            // nhanh hơn
-__leadSource.set({ showChips: true, showPanel: true, topN: 20 })
-__leadSource.leads                                               // dữ liệu đã phân loại
-```
+| Cách | Kết quả |
+|---|---|
+| `Alt + O` (lúc nào cũng dùng được) | ẩn/hiện cả panel + toàn bộ nhãn |
+| Nút `✕` trên panel | ẩn giao diện |
+| Nút tròn `🏷️` góc phải (hiện khi đang ẩn) | bật lại |
+| `__leadSource.hide()` / `.show()` / `.toggle()` | điều khiển bằng console |
 
-**Cơ chế lấy dữ liệu (3 lớp, tự động):**
-
-| Lớp | Việc gì | Cần bạn làm gì |
-|---|---|---|
-| 1 | Hook `fetch`/XHR, bắt mọi response `/conversations` (kể cả khi bấm phân trang) | không |
-| 2 | Tự gọi lại danh sách 20s/lần bằng đúng request app vừa dùng (giữ cookie của bạn) | không |
-| 3 | Với khách mới **hoặc** khách còn `?`, tự gọi `/conversations/<id>/messages` để xem tin nhắn → nâng độ chính xác (tối đa 3 hội thoại/vòng) | không |
-
-Vì lớp 3 chạy ngầm nên **bạn không cần mở đoạn chat nào**. Nếu API tin nhắn không cho phép
-(đổi param, chặn…), nhãn vẫn hiện theo dữ liệu danh sách và ghi chú "tin cậy thấp" — khi đó mở chat ra
-một lần là script tự bắt được và nâng độ chính xác.
+Trạng thái bật/tắt được lưu vào `localStorage` nên reload trang vẫn nhớ.
 
 **Xem demo không cần Pancake:** mở `demo/mock_pancake.html` (trang mô phỏng danh sách hội thoại,
 bấm `＋ Khách mới từ quảng cáo` để thấy nhãn xuất hiện ngay).
@@ -63,7 +53,7 @@ bấm `＋ Khách mới từ quảng cáo` để thấy nhãn xuất hiện ngay
 
 ```bash
 node tools/test_userscript.js                        # classifier JS == Python (không cần cài gì)
-npm i jsdom && node tools/test_userscript_dom.js     # chạy userscript trong DOM giả: chip + bảng nổi
+npm i jsdom && node tools/test_userscript_dom.js     # 22 kiểm tra: nhãn từng dòng, Alt+O, khách mới, tự cập nhật
 ```
 
 > Lưu ý: userscript chỉ **đọc** dữ liệu và vẽ badge, không sửa/gửi gì lên Pancake. Đừng hạ `pollMs`

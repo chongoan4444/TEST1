@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.0.0
-// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên cho từng hội thoại ngay trên danh sách Pancake. Không cần mở từng đoạn chat.
+// @version      2.0.0
+// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên ngay trên từng dòng hội thoại Pancake, cập nhật liên tục. Alt+O để bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
 // @match        https://*.pancake.vn/*
@@ -16,15 +16,18 @@
 
   // ======================================================================
   // 1. CẤU HÌNH  (đổi trực tiếp ở đây, hoặc trong console:
-  //    localStorage.setItem('leadSource.cfg', JSON.stringify({pollMs:10000})))
+  //    __leadSource.set({pollMs:10000}))
   // ======================================================================
   const DEFAULTS = {
+    enabled: true,        // bật/tắt toàn bộ giao diện (Alt+O)
     pollMs: 20000,        // tự gọi lại danh sách hội thoại mỗi N ms (0 = tắt)
     autoEnrich: true,     // khách mới/chưa rõ -> tự xem tin nhắn để phân loại chính xác
-    enrichLimit: 3,       // tối đa N hội thoại enrich mỗi vòng (tránh spam API)
+    enrichLimit: 3,       // tối đa N hội thoại enrich mỗi vòng
     showPanel: true,      // hiện bảng nổi
     showChips: true,      // gắn nhãn vào từng dòng trong danh sách
+    showLegend: true,     // hiện bảng kí hiệu trong panel
     topN: 12,             // số dòng hiện trong bảng nổi
+    tickMs: 1200,         // chu kỳ quét lại danh sách để cập nhật nhãn
     tagMap: {},           // {'83': {name:'Từ quảng cáo', source:'ads'}, '172': {name:'Live', source:'live'}}
     weights: { unread: 30, recent_24h: 20, recent_3d: 10, has_phone: 15, many_msgs: 10, intent: 20, source_ads: 10, source_post: 5 },
     thresholds: { hot: 70, warm: 40 },
@@ -50,6 +53,7 @@
   const SOURCE_SHORT = { ads: 'QC', post: 'BV', live: 'LV', organic: 'TN', unknown: '?' };
   const SOURCE_COLOR = { ads: '#7c3aed', post: '#0ea5e9', live: '#e11d48', organic: '#059669', unknown: '#6b7280' };
   const CONF_LABEL = { high: 'cao', mid: 'trung bình', low: 'thấp' };
+  const PRIO_LABEL = { hot: 'CHỐT NGAY', warm: 'Ưu tiên', cold: 'Theo dõi' };
 
   const AD_KEYS = ['ad_id', 'ad_ids', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name', 'ad_name',
     'ad_name_id', 'ads_context_data', 'referral', 'ad_referral', 'is_ad', 'from_ad', 'click_id', 'adgroup_id', 'source_ad_id'];
@@ -98,7 +102,7 @@
       if (keySet.indexOf(String(k).toLowerCase()) >= 0) out.push({ path: p, value: v });
       if (v && typeof v === 'object') deepFind(v, keySet, p, out, depth + 1);
       else if (typeof v === 'string' && (v[0] === '{' || v[0] === '[') && v.length < 5000) {
-        try { deepFind(JSON.parse(v), keySet, p, out, depth + 1); } catch (e) {} // eslint-disable-line no-empty
+        try { deepFind(JSON.parse(v), keySet, p, out, depth + 1); } catch (e) { /* ignore */ }
       }
     }
     return out;
@@ -243,7 +247,7 @@
       messageCount: nMsgs,
       unread: unread,
       score: score,
-      prio: prioKey === 'hot' ? 'CHỐT NGAY' : (prioKey === 'warm' ? 'Ưu tiên' : 'Theo dõi'),
+      prio: PRIO_LABEL[prioKey],
       prioKey: prioKey,
       updatedAt: updated ? updated.toISOString() : '',
       lastCustomerAt: lastCust ? lastCust.toISOString() : '',
@@ -265,7 +269,7 @@
   const state = {
     convs: new Map(),          // id -> conversation
     msgs: new Map(),           // id -> [message]
-    firstSeen: new Map(),      // id -> ts (để biết khách "mới")
+    firstSeen: new Map(),      // id -> ts
     listReq: null,             // {url, init} của request danh sách gần nhất
     msgUrlTpl: null,           // mẫu URL .../conversations/<id>/messages
     lastSync: 0,
@@ -291,8 +295,7 @@
       state.convs.set(c.id, c);
     });
     if (state.firstSeen.size > 800) {
-      const keys = Array.from(state.firstSeen.keys()).slice(0, 300);
-      keys.forEach(k => state.firstSeen.delete(k));
+      Array.from(state.firstSeen.keys()).slice(0, 300).forEach(k => state.firstSeen.delete(k));
     }
     state.lastSync = nowTs;
     scheduleRepaint();
@@ -351,7 +354,7 @@
   };
 
   // ======================================================================
-  // 4. TỰ POLL (để hội thoại mới hiện ra là có nhãn ngay, không cần F5)
+  // 4. TỰ POLL + ENRICH
   // ======================================================================
   function replayList() {
     const req = state.listReq;
@@ -370,7 +373,6 @@
       .catch(err => noteError('poll: ' + err.message));
   }
 
-  let enrichQueue = [];
   function enrich(convId) {
     if (!convId || state.msgs.has(convId)) return;
     let url;
@@ -391,8 +393,7 @@
     const pending = Array.from(state.convs.values())
       .filter(c => !state.msgs.has(c.id))
       .sort((a, b) => (now - (state.firstSeen.get(b.id) || 0)) - (now - (state.firstSeen.get(a.id) || 0)));
-    const pick = pending.slice(0, CFG.enrichLimit);
-    pick.forEach((c, i) => setTimeout(() => enrich(c.id), i * 900));
+    pending.slice(0, CFG.enrichLimit).forEach((c, i) => setTimeout(() => enrich(c.id), i * 900));
   }
 
   function tick() {
@@ -400,31 +401,67 @@
     if (CFG.pollMs > 0) replayList();
     processEnrich();
   }
-  setTimeout(tick, 1500);
-  setInterval(tick, Math.max(5000, CFG.pollMs || 20000));
 
   // ======================================================================
-  // 5. GIAO DIỆN: bảng nổi + nhãn trên từng dòng
+  // 5. TIỆN ÍCH UI
+  // ======================================================================
+  function cssEscape(v) {
+    if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') return CSS.escape(v);
+    return String(v).replace(/[^a-zA-Z0-9_-]/g, c => '\\' + c);
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function hhmm(iso) {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso).getTime()) / 60000;
+    if (diff < 1) return 'vừa xong';
+    if (diff < 60) return Math.round(diff) + ' phút';
+    if (diff < 1440) return Math.round(diff / 60) + ' giờ';
+    return Math.round(diff / 1440) + ' ngày';
+  }
+
+  function saveCfg(patch) {
+    try {
+      const cur = JSON.parse(localStorage.getItem('leadSource.cfg') || '{}');
+      Object.assign(cur, patch);
+      localStorage.setItem('leadSource.cfg', JSON.stringify(cur));
+    } catch (e) { /* ignore */ }
+  }
+
+  function leads(now) {
+    const out = [];
+    state.convs.forEach(c => out.push(buildLead(c, state.msgs.get(c.id) || [], now)));
+    return out.sort((a, b) => b.score - a.score);
+  }
+
+  // ======================================================================
+  // 6. BẢNG NỔI
   // ======================================================================
   let host = null;
   let shadow = null;
+  let fab = null;
   let repaintTimer = null;
 
   const CSS = `
     :host { all: initial; }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    .wrap { width: 372px; max-height: 74vh; display: flex; flex-direction: column;
+    .wrap { width: 384px; max-height: 76vh; display: flex; flex-direction: column;
             background: #fff; border: 1px solid #e6e9f0; border-radius: 14px; overflow: hidden;
             box-shadow: 0 12px 40px rgba(17,24,39,.18); font-size: 13px; color: #111827; }
-    .hd { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eef0f5;
-          background: linear-gradient(180deg,#fbfcff,#f4f6fb); cursor: default; }
+    .hd { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border-bottom: 1px solid #eef0f5;
+          background: linear-gradient(180deg,#fbfcff,#f4f6fb); }
     .hd .t { font-weight: 650; font-size: 13px; letter-spacing: -.1px; }
     .hd .dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px #dcfce7; }
     .hd .grow { flex: 1; }
-    .btn { border: 1px solid #e6e9f0; background: #fff; border-radius: 8px; padding: 3px 8px; font-size: 12px;
-           cursor: pointer; color: #374151; }
-    .btn:hover { background: #f3f4f6; }
-    .counts { display: flex; gap: 6px; padding: 8px 12px; flex-wrap: wrap; border-bottom: 1px solid #f2f4f8; }
+    .kbd { font-size: 9.5px; border: 1px solid #e6e9f0; border-radius: 5px; padding: 1px 4px; color: #9ca3af; background: #fff; }
+    .btn { border: 1px solid #e6e9f0; background: #fff; border-radius: 8px; padding: 3px 7px; font-size: 12px;
+           cursor: pointer; color: #374151; line-height: 1.3; }
+    .btn:hover { background: #eef1f7; }
+    .btn.on { background: #111827; color: #fff; border-color: #111827; }
+    .counts { display: flex; gap: 6px; padding: 8px 11px; flex-wrap: wrap; border-bottom: 1px solid #f2f4f8; }
     .cnt { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #374151;
            background: #f6f7fb; border: 1px solid #eceff5; border-radius: 999px; padding: 2px 8px; }
     .cnt b { font-weight: 700; }
@@ -446,11 +483,23 @@
     .acts { display: flex; gap: 4px; }
     .icon { border: none; background: transparent; cursor: pointer; font-size: 13px; padding: 2px 3px; border-radius: 6px; opacity: .55; }
     .icon:hover { opacity: 1; background: #eef1f7; }
-    .ft { padding: 7px 12px; border-top: 1px solid #eef0f5; color: #9ca3af; font-size: 11px;
+    .legendBox { padding: 8px 11px; border-top: 1px solid #f2f4f8; background: #fcfdff;
+                 display: flex; flex-wrap: wrap; gap: 5px 10px; font-size: 11px; color: #4b5563; }
+    .sym { display: inline-flex; align-items: center; gap: 4px; }
+    .sym b { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 15px;
+             border-radius: 4px; color: #fff; font-size: 9.5px; font-weight: 700; padding: 0 4px; }
+    .ft { padding: 7px 11px; border-top: 1px solid #eef0f5; color: #9ca3af; font-size: 11px;
           display: flex; justify-content: space-between; gap: 8px; }
     .empty { padding: 18px 14px; color: #6b7280; font-size: 12.5px; line-height: 1.6; }
-    .collapsed .list, .collapsed .counts, .collapsed .ft { display: none; }
+    .collapsed .list, .collapsed .counts, .collapsed .ft, .collapsed .legendBox { display: none; }
     .err { color: #b91c1c; }
+  `;
+
+  const FAB_CSS = `
+    button { width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+             background: #7c3aed; color: #fff; font-size: 19px; line-height: 1;
+             box-shadow: 0 8px 24px rgba(124,58,237,.4); display: flex; align-items: center; justify-content: center; }
+    button:hover { filter: brightness(1.08); }
   `;
 
   function ensureHost() {
@@ -470,77 +519,47 @@
     wrap.addEventListener('click', onPanelClick);
   }
 
-  function leads(now) {
-    const out = [];
-    state.convs.forEach(c => out.push(buildLead(c, state.msgs.get(c.id) || [], now)));
-    return out.sort((a, b) => b.score - a.score);
+  function ensureFab() {
+    if (fab && document.contains(fab)) return;
+    fab = document.createElement('div');
+    fab.id = '__lead_source_fab';
+    fab.style.cssText = 'position:fixed;z-index:2147483000;right:16px;bottom:16px;';
+    const sh = fab.attachShadow({ mode: 'open' });
+    const st = document.createElement('style');
+    st.textContent = FAB_CSS;
+    const b = document.createElement('button');
+    b.textContent = '🏷️';
+    b.title = 'Bật phân loại tệp khách (Alt+O)';
+    b.setAttribute('aria-label', 'Bật phân loại tệp khách');
+    b.addEventListener('click', () => setEnabled(true));
+    sh.appendChild(st);
+    sh.appendChild(b);
+    document.documentElement.appendChild(fab);
   }
 
-  function hhmm(iso) {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const diff = (Date.now() - d.getTime()) / 60000;
-    if (diff < 1) return 'vừa xong';
-    if (diff < 60) return Math.round(diff) + ' phút';
-    if (diff < 1440) return Math.round(diff / 60) + ' giờ';
-    return Math.round(diff / 1440) + ' ngày';
-  }
-
-  // CSS.escape có thể không tồn tại (trình duyệt cũ / môi trường test)
-  function cssEscape(v) {
-    if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') return CSS.escape(v);
-    return String(v).replace(/[^a-zA-Z0-9_-]/g, c => '\\' + c);
-  }
-
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-
-  function paint() {
-    if (!CFG.showPanel) { if (host) host.style.display = 'none'; return; }
-    ensureHost();
-    host.style.display = '';
-    const wrap = shadow.getElementById('wrap');
-    if (!wrap) return;
-    const now = Date.now();
-    const all = leads(now);
-    const counts = { ads: 0, post: 0, live: 0, organic: 0, unknown: 0 };
-    all.forEach(r => { counts[r.source] = (counts[r.source] || 0) + 1; });
-    const hot = all.filter(r => r.prioKey === 'hot').length;
-    const list = all.slice(0, CFG.topN);
-
-    const wasCollapsed = wrap.classList.contains('collapsed');
-    const prevList = shadow.querySelector('.list');
-    const scrollTop = prevList ? prevList.scrollTop : 0;
-    wrap.innerHTML =
-      '<div class="hd"><span class="dot"></span><span class="t">Tệp khách</span>' +
-      '<span class="grow"></span>' +
-      '<span class="cnt"><b>' + all.length + '</b></span>' +
-      '<button class="btn" data-act="collapse">' + (wasCollapsed ? '▾' : '▴') + '</button></div>' +
-      '<div class="counts">' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.ads + '"></i>Quảng cáo <b>' + counts.ads + '</b></span>' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.post + '"></i>Bài viết <b>' + counts.post + '</b></span>' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.live + '"></i>Live <b>' + counts.live + '</b></span>' +
-      '<span class="cnt"><i style="background:' + SOURCE_COLOR.organic + '"></i>Tự nhắn <b>' + counts.organic + '</b></span>' +
-      '<span class="cnt"><i style="background:#dc2626"></i>Chốt ngay <b>' + hot + '</b></span>' +
-      '</div>' +
-      (list.length ? '<div class="list">' + list.map(r => itemHtml(r, state.msgs.has(r.id))).join('') + '</div>'
-        : '<div class="empty">Chưa bắt được danh sách hội thoại.<br>Mở trang <b>Hội thoại / multi_pages</b> của Pancake, ' +
-          'script sẽ tự đọc dữ liệu và gắn nhãn (không cần mở từng đoạn chat).</div>') +
-      '<div class="ft"><span>' + (state.lastSync ? 'đồng bộ ' + hhmm(new Date(state.lastSync).toISOString()) + ' trước' : 'chưa đồng bộ') + '</span>' +
-      '<span class="' + (state.errors.length ? 'err' : '') + '">' + (state.errors.length ? state.errors[state.errors.length - 1].msg : 'poll ' + (CFG.pollMs / 1000) + 's') + '</span></div>';
-    if (wasCollapsed) wrap.classList.add('collapsed');
-    const newList = shadow.querySelector('.list');
-    if (newList && scrollTop) newList.scrollTop = scrollTop;
+  function legendHtml() {
+    if (!CFG.showLegend) return '';
+    const sym = (code, color, label) =>
+      '<span class="sym"><b style="background:' + color + '">' + code + '</b>' + label + '</span>';
+    return '<div class="legendBox">' +
+      sym('QC', SOURCE_COLOR.ads, 'Quảng cáo') +
+      sym('BV', SOURCE_COLOR.post, 'Bài viết') +
+      sym('LV', SOURCE_COLOR.live, 'Livestream') +
+      sym('TN', SOURCE_COLOR.organic, 'Tự nhắn') +
+      sym('?', SOURCE_COLOR.unknown, 'Chưa rõ') +
+      sym('🔥', '#dc2626', 'Chốt ngay ≥70') +
+      '<span class="sym">Ưu tiên 40–69</span>' +
+      '<span class="sym">Theo dõi &lt;40</span>' +
+      '</div>';
   }
 
   function itemHtml(r, fetched) {
-    const cl = r.prioKey;
     const color = SOURCE_COLOR[r.source];
     const conf = r.confidence === 'high' ? '' : ' · tin cậy ' + CONF_LABEL[r.confidence];
     const tip = esc(r.evidence.join('\n') + (r.reasons.length ? '\n\n' + r.reasons.join('\n') : ''));
     return '<div class="item" data-id="' + esc(r.id) + '" data-act="focus" title="' + tip + '">' +
-      '<div class="score ' + cl + '">' + r.score + '<small>' + (r.prioKey === 'hot' ? 'CHỐT' : (r.prioKey === 'warm' ? 'ưu tiên' : 'theo dõi')) + '</small></div>' +
+      '<div class="score ' + r.prioKey + '">' + r.score +
+      '<small>' + (r.prioKey === 'hot' ? 'CHỐT' : (r.prioKey === 'warm' ? 'ưu tiên' : 'theo dõi')) + '</small></div>' +
       '<div class="mid">' +
       '<div class="row1"><span class="badge" style="background:' + color + '">' + SOURCE_SHORT[r.source] + '</span>' +
       '<span class="nm">' + esc(r.name) + '</span></div>' +
@@ -557,6 +576,49 @@
       '</div></div>';
   }
 
+  function paint() {
+    if (!CFG.enabled) return;
+    if (!CFG.showPanel) { if (host) host.style.display = 'none'; return; }
+    ensureHost();
+    host.style.display = '';
+    const wrap = shadow.getElementById('wrap');
+    if (!wrap) return;
+    const all = leads(Date.now());
+    const counts = { ads: 0, post: 0, live: 0, organic: 0, unknown: 0 };
+    all.forEach(r => { counts[r.source] = (counts[r.source] || 0) + 1; });
+    const hot = all.filter(r => r.prioKey === 'hot').length;
+    const list = all.slice(0, CFG.topN);
+    const wasCollapsed = wrap.classList.contains('collapsed');
+    const prevList = shadow.querySelector('.list');
+    const scrollTop = prevList ? prevList.scrollTop : 0;
+
+    wrap.innerHTML =
+      '<div class="hd"><span class="dot"></span><span class="t">Tệp khách</span>' +
+      '<span class="cnt" style="padding:1px 7px"><b>' + all.length + '</b></span>' +
+      '<span class="grow"></span>' +
+      '<span class="kbd">Alt+O</span>' +
+      '<button class="btn ' + (CFG.showLegend ? 'on' : '') + '" data-act="legend" title="Bật/tắt bảng kí hiệu">?</button>' +
+      '<button class="btn" data-act="collapse" title="Thu gọn">' + (wasCollapsed ? '▾' : '▴') + '</button>' +
+      '<button class="btn" data-act="off" title="Ẩn giao diện (Alt+O)">✕</button></div>' +
+      '<div class="counts">' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.ads + '"></i>Quảng cáo <b>' + counts.ads + '</b></span>' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.post + '"></i>Bài viết <b>' + counts.post + '</b></span>' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.live + '"></i>Live <b>' + counts.live + '</b></span>' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.organic + '"></i>Tự nhắn <b>' + counts.organic + '</b></span>' +
+      '<span class="cnt"><i style="background:#dc2626"></i>Chốt ngay <b>' + hot + '</b></span>' +
+      '</div>' +
+      (list.length ? '<div class="list">' + list.map(r => itemHtml(r, state.msgs.has(r.id))).join('') + '</div>'
+        : '<div class="empty">Chưa bắt được danh sách hội thoại.<br>Mở trang <b>Hội thoại / multi_pages</b> của Pancake, ' +
+          'script sẽ tự đọc dữ liệu và gắn nhãn (không cần mở từng đoạn chat).</div>') +
+      legendHtml() +
+      '<div class="ft"><span>' + (state.lastSync ? 'đồng bộ ' + hhmm(new Date(state.lastSync).toISOString()) + ' trước' : 'chưa đồng bộ') + '</span>' +
+      '<span class="' + (state.errors.length ? 'err' : '') + '">' + (state.errors.length ? esc(state.errors[state.errors.length - 1].msg) : 'poll ' + (CFG.pollMs / 1000) + 's') + '</span></div>';
+
+    if (wasCollapsed) wrap.classList.add('collapsed');
+    const newList = shadow.querySelector('.list');
+    if (newList && scrollTop) newList.scrollTop = scrollTop;
+  }
+
   function onPanelClick(e) {
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
@@ -568,6 +630,13 @@
       btn.textContent = wrap.classList.contains('collapsed') ? '▾' : '▴';
       return;
     }
+    if (act === 'legend') {
+      CFG.showLegend = !CFG.showLegend;
+      saveCfg({ showLegend: CFG.showLegend });
+      paint();
+      return;
+    }
+    if (act === 'off') { setEnabled(false); return; }
     if (!id) return;
     const conv = state.convs.get(id);
     if (act === 'copy') {
@@ -577,24 +646,40 @@
       navigator.clipboard.writeText(text).then(() => {
         btn.textContent = '✅';
         setTimeout(() => { btn.textContent = '📋'; }, 1200);
-      });
+      }).catch(() => {});
       return;
     }
     if (act === 'enrich') { enrich(id); btn.style.opacity = '.3'; return; }
     if (act === 'focus') focusInList(conv);
   }
 
-  // ---------- gắn nhãn vào danh sách hội thoại của Pancake ----------
-  const chips = new Map(); // convId -> element
+  // ======================================================================
+  // 7. GẮN NHÃN TRỰC TIẾP LÊN TỪNG DÒNG HỘI THOẠI
+  // ======================================================================
+  const chips = new Map();   // convId -> element
+  let nameIndex = null;
+  let lastDecorate = 0;
 
-  // Quét DOM 1 lần cho tất cả khách (thay vì mỗi khách quét lại toàn trang)
+  function chipText(lead) {
+    const base = SOURCE_SHORT[lead.source] + ' ' + lead.score;
+    const unsure = (lead.confidence === 'low' && lead.source !== 'organic' && lead.source !== 'unknown') ? '?' : '';
+    return (lead.prioKey === 'hot' ? '🔥 ' : '') + base + unsure;
+  }
+
+  function chipTitle(lead) {
+    return SOURCE_LABEL[lead.source] + ' · ' + lead.score + ' điểm · ' + lead.prio + ' · tin cậy ' + CONF_LABEL[lead.confidence] +
+      (lead.evidence.length ? '\n\nBằng chứng:\n• ' + lead.evidence.join('\n• ') : '') +
+      (lead.reasons.length ? '\n\nĐiểm:\n• ' + lead.reasons.join('\n• ') : '') +
+      '\n\n(Alt+O để ẩn/hiện)';
+  }
+
   function buildNameIndex() {
     const index = new Map();
     const nodes = document.querySelectorAll('span,div,a,p,b,strong,h4');
     for (let i = 0; i < nodes.length; i++) {
       const el = nodes[i];
       if (el.childElementCount) continue;
-      if (el.classList && el.classList.contains('__ls_chip')) continue;
+      if (el.classList && (el.classList.contains('__ls_chip') || el.closest('#__lead_source_host, #__lead_source_fab'))) continue;
       if (el.offsetParent === null) continue;
       const t = (el.textContent || '').trim();
       if (!t || t.length > 48) continue;
@@ -603,11 +688,18 @@
     return index;
   }
 
-  let nameIndex = null;
   function findNameNode(name) {
     if (!name) return null;
     if (!nameIndex) nameIndex = buildNameIndex();
-    return nameIndex.get(name) || null;
+    let el = nameIndex.get(name);
+    if (el && document.contains(el)) return el;
+    // tên có thể bị React đổi cấu trúc -> dò mềm theo tiền tố
+    const key = String(name).trim().toLowerCase();
+    for (const [text, node] of nameIndex) {
+      const t = text.toLowerCase();
+      if (t === key || (t.length > 4 && (key.indexOf(t) === 0 || t.indexOf(key) === 0))) return node;
+    }
+    return null;
   }
 
   function findRowEl(node) {
@@ -628,42 +720,61 @@
     const chip = document.createElement('span');
     chip.className = '__ls_chip';
     chip.dataset.lsId = lead.id;
-    chip.textContent = SOURCE_SHORT[lead.source] + ' ' + lead.score;
-    chip.title = SOURCE_LABEL[lead.source] + ' · ' + lead.score + ' điểm\n' +
-      lead.evidence.join('\n') + (lead.reasons.length ? '\n\n' + lead.reasons.join('\n') : '');
+    chip.dataset.lsSource = lead.source;
+    chip.textContent = chipText(lead);
+    chip.title = chipTitle(lead);
     chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;' +
       'background:' + SOURCE_COLOR[lead.source] + ';color:#fff;border-radius:999px;padding:0 6px;' +
       'font-size:10px;font-weight:700;line-height:16px;height:16px;margin-left:6px;' +
       'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;vertical-align:middle;' +
-      'cursor:default;flex:0 0 auto;';
+      'cursor:default;flex:0 0 auto;letter-spacing:.2px;white-space:nowrap;';
     return chip;
   }
 
-  let lastDecorate = 0;
+  function updateChip(chip, lead) {
+    const text = chipText(lead);
+    if (chip.textContent !== text) chip.textContent = text;
+    if (chip.dataset.lsSource !== lead.source) {
+      chip.dataset.lsSource = lead.source;
+      chip.style.background = SOURCE_COLOR[lead.source];
+    }
+    const title = chipTitle(lead);
+    if (chip.title !== title) chip.title = title;
+  }
 
+  /** Gắn / cập nhật nhãn cho mọi hội thoại đang có trong DOM. */
   function decorate() {
-    if (!CFG.showChips || document.hidden) return;
+    if (!CFG.enabled || !CFG.showChips || document.hidden) return;
     const now = Date.now();
-    if (now - lastDecorate < 600) return;
+    if (now - lastDecorate < 400) return;
     lastDecorate = now;
-    nameIndex = null; // dựng lại index mỗi lượt
+    nameIndex = null;
+
     state.convs.forEach(conv => {
       const lead = buildLead(conv, state.msgs.get(conv.id) || [], now);
+
+      // 1) đã có nhãn và còn trong DOM -> chỉ cập nhật
       const existing = chips.get(conv.id);
-      if (existing && document.contains(existing)) {
-        if (existing.textContent !== SOURCE_SHORT[lead.source] + ' ' + lead.score) {
-          existing.textContent = SOURCE_SHORT[lead.source] + ' ' + lead.score;
-          existing.style.background = SOURCE_COLOR[lead.source];
-        }
-        return;
-      }
-      if (document.querySelector('.__ls_chip[data-ls-id="' + cssEscape(conv.id) + '"]')) return;
+      if (existing && document.contains(existing)) { updateChip(existing, lead); return; }
+      if (existing) chips.delete(conv.id);
+
+      // 2) còn nhãn mồ côi do React render lại
+      const orphan = document.querySelector('.__ls_chip[data-ls-id="' + cssEscape(conv.id) + '"]');
+      if (orphan) { chips.set(conv.id, orphan); updateChip(orphan, lead); return; }
+
+      // 3) chưa có -> tìm dòng và chèn
       const nameNode = findNameNode(lead.name);
       if (!nameNode) return;
       const chip = makeChip(lead);
-      nameNode.insertAdjacentElement('afterend', chip);
+      try { nameNode.insertAdjacentElement('afterend', chip); } catch (e) { return; }
       chips.set(conv.id, chip);
     });
+  }
+
+  function clearChips() {
+    document.querySelectorAll('.__ls_chip').forEach(el => el.remove());
+    chips.clear();
+    nameIndex = null;
   }
 
   function focusInList(conv) {
@@ -671,55 +782,108 @@
     const lead = buildLead(conv, state.msgs.get(conv.id) || [], Date.now());
     const chip = document.querySelector('.__ls_chip[data-ls-id="' + cssEscape(conv.id) + '"]');
     const target = chip || findNameNode(lead.name);
-    if (!target) { LOG('Không thấy dòng của', lead.name, '— thử cuộn danh sách hoặc bấm lọc theo nguồn.'); return; }
+    if (!target) { LOG('Không thấy dòng của', lead.name, '— thử cuộn danh sách hoặc lọc theo nguồn.'); return; }
     target.scrollIntoView({ block: 'center', behavior: 'smooth' });
     const row = findRowEl(target);
     const old = row.style.boxShadow;
-    row.style.boxShadow = '0 0 0 2px #7c3aed inset';
+    row.style.boxShadow = '0 0 0 2px ' + SOURCE_COLOR[lead.source] + ' inset';
     setTimeout(() => { row.style.boxShadow = old; }, 1400);
   }
+
+  // ======================================================================
+  // 8. BẬT / TẮT  (Alt+O, nút ✕, FAB 🏷️)
+  // ======================================================================
+  function setEnabled(on) {
+    CFG.enabled = !!on;
+    saveCfg({ enabled: CFG.enabled });
+    if (!CFG.enabled) {
+      if (host) host.style.display = 'none';
+      clearChips();
+      ensureFab();
+      fab.style.display = '';
+    } else {
+      if (fab) fab.style.display = 'none';
+      ensureHost();
+      host.style.display = '';
+      paint();
+      lastDecorate = 0;
+      decorate();
+    }
+    return CFG.enabled;
+  }
+
+  function onKeydown(e) {
+    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    const k = (e.key || '').toLowerCase();
+    if (k !== 'o' && e.code !== 'KeyO') return;
+    e.preventDefault();
+    e.stopPropagation();
+    setEnabled(!CFG.enabled);
+    LOG(CFG.enabled ? 'đã bật giao diện' : 'đã ẩn giao diện (Alt+O để bật lại, hoặc bấm nút 🏷️)');
+  }
+
+  document.addEventListener('keydown', onKeydown, true);
 
   function scheduleRepaint() {
     if (repaintTimer) return;
     repaintTimer = setTimeout(() => {
       repaintTimer = null;
+      if (!CFG.enabled) return;
       try { paint(); } catch (e) { LOG('paint lỗi', e); }
       try { decorate(); } catch (e) { LOG('decorate lỗi', e); }
-    }, 250);
+    }, 200);
   }
 
-  // re-render khi React vẽ lại danh sách
+  // React vẽ lại danh sách -> gắn lại nhãn; đồng thời quét định kỳ cho list ảo hoá
   const mo = new MutationObserver(() => scheduleRepaint());
   function startObserver() {
-    mo.observe(document.documentElement, { childList: true, subtree: true });
+    mo.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startObserver, { once: true });
   else startObserver();
 
   // ======================================================================
-  // 6. API console để debug
+  // 9. KHỞI ĐỘNG
+  // ======================================================================
+  setTimeout(tick, 1500);
+  setInterval(tick, Math.max(5000, CFG.pollMs || 20000));
+  setInterval(() => { if (CFG.enabled) { try { decorate(); } catch (e) { /* ignore */ } } }, Math.max(600, CFG.tickMs));
+
+  if (CFG.enabled) setTimeout(() => { paint(); decorate(); }, 800);
+  else { ensureFab(); }
+
+  // ======================================================================
+  // 10. API console
   // ======================================================================
   window.__leadSource = {
     cfg: CFG,
     state: state,
     get leads() { return leads(Date.now()); },
+    get visible() { return !!CFG.enabled; },
+    toggle: function () { return setEnabled(!CFG.enabled); },
+    show: function () { return setEnabled(true); },
+    hide: function () { return setEnabled(false); },
     refresh: tick,
-    reload: () => { state.convs.clear(); tick(); },
+    reload: () => { state.convs.clear(); chips.clear(); tick(); },
     classify: classify,
     buildLead: buildLead,
+    decorate: decorate,
     /** đổi cấu hình: __leadSource.set({tagMap:{'83':{name:'Từ quảng cáo',source:'ads'}}}) */
     set: function (patch) {
       Object.assign(CFG, patch);
-      localStorage.setItem('leadSource.cfg', JSON.stringify(CFG));
-      scheduleRepaint();
+      saveCfg(patch);
+      if ('enabled' in patch) setEnabled(patch.enabled);
+      else scheduleRepaint();
       return CFG;
     },
     help: function () {
-      LOG('Ví dụ map tag:\n  __leadSource.set({tagMap: {"83": {name:"Từ quảng cáo", source:"ads"}}})' +
-        '\nĐổi chu kỳ poll:  __leadSource.set({pollMs: 10000})' +
-        '\nXem dữ liệu thô: __leadSource.state.convs');
+      LOG('Alt+O  = ẩn/hiện giao diện (hoặc bấm nút 🏷️ / ✕)' +
+        '\nMap tag:      __leadSource.set({tagMap: {"83": {name:"Từ quảng cáo", source:"ads"}}})' +
+        '\nChu kỳ poll:  __leadSource.set({pollMs: 10000})' +
+        '\nBảng kí hiệu: __leadSource.set({showLegend: false})' +
+        '\nDữ liệu thô:  __leadSource.state.convs');
     },
   };
 
-  LOG('đã bật. Gõ __leadSource.help() để xem cách cấu hình.');
+  LOG('đã bật (v2). Alt+O để ẩn/hiện · __leadSource.help() để xem cấu hình');
 })();

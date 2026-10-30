@@ -197,7 +197,8 @@ __ROWS__
       <button class="ghost" id="refresh">↻ Đồng bộ lại</button>
       <button class="ghost" onclick="location.href='../reports/demo_leads.html'">Mở báo cáo HTML →</button>
     </div>
-    <p class="note">Bấm "Khách mới" để thấy: dòng chat vừa xuất hiện là có nhãn ngay (kèm điểm ưu tiên).</p>
+    <p class="note"><b>Alt+O</b> để ẩn/hiện toàn bộ giao diện · <b>🔥</b> = khách nên chốt ngay (≥70 điểm) ·
+    bấm "＋ Khách mới" để thấy dòng chat vừa xuất hiện là có nhãn ngay.</p>
   </main>
 </div>
 <script>
