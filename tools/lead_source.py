@@ -41,29 +41,19 @@ from datetime import datetime, timedelta, timezone
 
 # Key chứa mã quảng cáo / referral. Gặp ở bất kỳ đâu trong object đều tính.
 AD_KEYS = {
-    "ad_id", "ad_ids", "adset_id", "adset_name", "campaign_id", "campaign_name",
-    "ad_name", "ad_name_id", "ads_context_data", "referral", "ad_referral",
-    "is_ad", "from_ad", "adgroup_id", "source_ad_id", "click_from",
+    "ad_id", "ad_ids", "ads_context_data", "referral", "ad_referral", "is_ad", "from_ad",
 }
 
 # Tín hiệu quảng cáo THẬT của Pancake: message.attachments[].type = "ad_click" + ad_id
-AD_TYPE_VALUES = {"ad_click", "ad_referral", "ad"}
+AD_TYPE_VALUES = {"ad_click", "ad_referral"}
 
 # Key cho thấy hội thoại sinh ra từ comment bài viết.
 POST_KEYS = {"post_id", "post", "comment_id", "post_story", "post_permalink"}
-LIVE_KEYS = {"has_livestream_order", "is_livestream_order", "live_video_id"}
+LIVE_KEYS = {"has_livestream_order", "is_livestream_order", "live_video_id", "live_video_status"}
 
 # Giá trị "type" được coi là comment (Pancake dùng INBOX cho tin nhắn).
 COMMENT_TYPE_HINTS = ("COMMENT", "REPLY", "POST_COMMENT")
 LIVE_TYPE_HINTS = ("LIVE", "LIVESTREAM")
-
-# Từ khoá thể hiện ý định mua (đã bỏ dấu, so khớp theo từ nguyên vẹn).
-DEFAULT_INTENT = [
-    "gia", "bao nhieu", "nhieu tien", "size", "mau", "con hang", "con khong",
-    "dat hang", "dat", "mua", "lay", "ship", "giao", "ib", "inbox", "chot",
-    "order", "sdt", "so dien thoai", "dia chi", "chuyen khoan", "ck",
-    "giam gia", "khuyen mai", "sale", "ai ban", "con size", "ship cod",
-]
 
 DEFAULT_RULES = {
     # Map tag id (Pancake trả về dạng số) -> tên + nguồn.
@@ -73,18 +63,6 @@ DEFAULT_RULES = {
         "83": {"name": "(chưa rõ)", "source": None},
         "172": {"name": "(chưa rõ)", "source": None},
     },
-    "intent_keywords": DEFAULT_INTENT,
-    "weights": {
-        "unread": 30,
-        "recent_24h": 20,
-        "recent_3d": 10,
-        "has_phone": 15,
-        "many_msgs": 10,
-        "intent": 20,
-        "source_ads": 10,
-        "source_post": 5,
-    },
-    "thresholds": {"hot": 70, "warm": 40},
 }
 
 SOURCE_LABEL = {
@@ -95,8 +73,8 @@ SOURCE_LABEL = {
     "unknown": "Chưa rõ",
 }
 
-CONF_LABEL = {"high": "cao", "mid": "trung bình", "low": "thấp"}
-PRIO_LABEL = {"hot": "CHỐT NGAY", "warm": "Ưu tiên", "cold": "Theo dõi"}
+CONF_LABEL = {"high": "chắc chắn", "mid": "khá chắc", "low": "thấp", "none": "chưa kiểm tra"}
+SOURCE_ORDER = ("ads", "post", "live", "organic", "unknown")
 
 # --------------------------------------------------------------------------
 # Tiện ích
@@ -287,8 +265,12 @@ def load_rules(path):
     return rules
 
 
-def classify(conv, msgs, rules):
-    """-> (source, confidence_key, evidence[list[str]])"""
+def classify(conv, msgs, rules, checked=None):
+    """-> (source, confidence_key, evidence[list[str]])
+
+    Chỉ kết luận khi có bằng chứng thật (xem README). Chưa đọc tin nhắn -> "unknown",
+    KHÔNG mặc định là "organic" (đây là lỗi "hiện TN, bấm vào lại thành QC").
+    """
     evidence = []
     source, confidence = None, "low"
 
@@ -304,9 +286,7 @@ def classify(conv, msgs, rules):
 
     # ---- 1. Quảng cáo: có mã ad / referral ở bất kỳ đâu
     ad_hits = []
-    for blob_name, blob in (("extra_info", conv.get("extra_info")),
-                            ("conv", {"post": conv.get("post"), "type": conv.get("type")}),
-                            ("messages", msgs)):
+    for blob_name, blob in (("extra_info", conv.get("extra_info")),):
         if not blob:
             continue
         for path, value in deep_find(blob, AD_KEYS):
@@ -332,6 +312,21 @@ def classify(conv, msgs, rules):
         if value in (None, "", {}, []):
             continue
         post_hits.append(f"{path} = {jsonify(value)}")
+    for i, m in enumerate(msgs):
+        if not isinstance(m, dict):
+            continue
+        for j, a in enumerate(m.get("attachments") or []):
+            if not isinstance(a, dict):
+                continue
+            if str(a.get("type") or "").lower() in AD_TYPE_VALUES:
+                continue
+            comment = a.get("comment")
+            if isinstance(comment, dict) and (comment.get("content") or comment.get("msg_id")):
+                post_hits.append(
+                    f"tin nhắn {i + 1}: bình luận bài viết \"{clip(str(comment.get('content') or ''), 40)}\"")
+            elif isinstance(a.get("post_attachments"), list) or a.get("post_type"):
+                post_hits.append(f"tin nhắn {i + 1}: chia sẻ bài viết"
+                                 + (f" ({a.get('post_type')})" if a.get("post_type") else ""))
     is_comment_type = any(h in conv_type for h in COMMENT_TYPE_HINTS) or any(
         any(h in t for h in COMMENT_TYPE_HINTS) for t in msg_types)
     if post_hits or is_comment_type:
@@ -346,9 +341,8 @@ def classify(conv, msgs, rules):
     # ---- 3. Livestream
     live_hits = [(p, v) for p, v in deep_find({"conv": conv, "messages": msgs}, LIVE_KEYS)
                  if v not in (None, "", {}, [], False, 0)]
-    live_type = any(h in conv_type for h in LIVE_TYPE_HINTS) or any(
-        any(h in t for h in LIVE_TYPE_HINTS) for t in msg_types)
-    if live_hits or live_type:
+    live_type = False   # type INBOX/COMMENT không nói gì về livestream -> chỉ tin vào cờ thật
+    if live_hits:
         if source is None:
             source, confidence = "live", "mid"
         if live_hits:
@@ -378,9 +372,13 @@ def classify(conv, msgs, rules):
 
     # ---- 5. Mặc định
     if source is None:
-        if conv_type in ("", "INBOX"):
-            source, confidence = "organic", "low"
-            evidence.append("type = INBOX, không có dấu hiệu ads / post / live")
+        seen = bool(checked) or bool(msgs)
+        if not seen:
+            source, confidence = "unknown", "none"
+            evidence.append("chưa đọc tin nhắn của hội thoại này → chưa kết luận")
+        elif conv_type in ("", "INBOX"):
+            source, confidence = "organic", "high"
+            evidence.append(f"đã đọc {len(msgs)} tin nhắn: không có ad_click / bài viết / livestream")
         else:
             source, confidence = "unknown", "low"
             evidence.append(f"type = {conv_type} (chưa nhận diện được)")
@@ -388,8 +386,8 @@ def classify(conv, msgs, rules):
     return source, confidence, evidence
 
 
-def build_row(conv, msgs, rules, now, tz_hours):
-    source, confidence, evidence = classify(conv, msgs, rules)
+def build_row(conv, msgs, rules, now, tz_hours, checked=None):
+    source, confidence, evidence = classify(conv, msgs, rules, checked)
 
     customers = conv.get("customers") or []
     cust = customers[0] if customers and isinstance(customers[0], dict) else {}
@@ -402,44 +400,6 @@ def build_row(conv, msgs, rules, now, tz_hours):
     snippet = conv.get("snippet") or ""
     unread = int(conv.get("unread_count") or 0)
     n_msgs = int(conv.get("message_count") or 0)
-
-    # ---- điểm ưu tiên
-    w = rules["weights"]
-    score, reasons = 0, []
-    if unread > 0:
-        score += w["unread"]
-        reasons.append(f"chưa đọc {unread} tin +{w['unread']}")
-    ref = last_cust or updated
-    if ref:
-        age = now - ref
-        if age <= timedelta(hours=24):
-            score += w["recent_24h"]
-            reasons.append(f"tương tác < 24h +{w['recent_24h']}")
-        elif age <= timedelta(days=3):
-            score += w["recent_3d"]
-            reasons.append(f"tương tác < 3 ngày +{w['recent_3d']}")
-    if conv.get("has_phone") or phones:
-        score += w["has_phone"]
-        reasons.append(f"có SĐT +{w['has_phone']}")
-    if n_msgs >= 3:
-        score += w["many_msgs"]
-        reasons.append(f"{n_msgs} tin nhắn +{w['many_msgs']}")
-    norm = strip_accents(snippet)
-    hits = [k for k in rules["intent_keywords"]
-            if re.search(r"(?<![a-z0-9])" + re.escape(strip_accents(k)) + r"(?![a-z0-9])", norm)]
-    if hits:
-        score += w["intent"]
-        reasons.append(f"ý định mua: {', '.join(hits[:3])} +{w['intent']}")
-    if source == "ads":
-        score += w["source_ads"]
-        reasons.append(f"từ quảng cáo +{w['source_ads']}")
-    elif source == "post":
-        score += w["source_post"]
-        reasons.append(f"từ bài viết +{w['source_post']}")
-    score = max(0, min(100, score))
-
-    th = rules["thresholds"]
-    prio_key = "hot" if score >= th["hot"] else ("warm" if score >= th["warm"] else "cold")
 
     return {
         "id": conv.get("id") or "",
@@ -461,10 +421,8 @@ def build_row(conv, msgs, rules, now, tz_hours):
         "updated_at": updated.isoformat() if updated else "",
         "updated_disp": fmt_local(updated, tz_hours),
         "last_customer_at": last_cust.isoformat() if last_cust else "",
-        "score": score,
-        "prio_key": prio_key,
-        "prio": PRIO_LABEL[prio_key],
-        "reasons": reasons,
+        "at": (updated or last_cust).timestamp() if (updated or last_cust) else 0,
+        "checked": bool(checked) or bool(msgs),
         "messages_loaded": len(msgs),
     }
 
@@ -474,15 +432,20 @@ def build_row(conv, msgs, rules, now, tz_hours):
 # --------------------------------------------------------------------------
 
 
+def sort_rows(r):
+    """Xếp theo LOẠI TIN rồi mới tới thời gian (không còn điểm ưu tiên)."""
+    return (SOURCE_ORDER.index(r["source"]) if r["source"] in SOURCE_ORDER else 9, -(r.get("at") or 0))
+
+
 def write_csv(rows, path):
-    header = ["Điểm", "Ưu tiên", "Nguồn", "Độ tin cậy", "Khách", "PSID", "SĐT",
+    header = ["Loại tin", "Độ tin cậy", "Khách", "PSID", "SĐT",
               "Page ID", "Page", "Chưa đọc", "Số tin", "Cập nhật", "Tin cuối",
               "Bằng chứng"]
     with open(path, "w", encoding="utf-8-sig", newline="") as fh:
         wr = csv.writer(fh)
         wr.writerow(header)
         for r in rows:
-            wr.writerow([r["score"], r["prio"], r["source_label"], r["confidence"],
+            wr.writerow([r["source_label"], r["confidence"],
                          r["name"], r["psid"], r["phone"], r["page_id"], r["page_name"],
                          r["unread"], r["message_count"], r["updated_disp"], r["snippet"],
                          " | ".join(r["evidence"])])
@@ -498,7 +461,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   :root{
     --bg:#f6f7fb; --card:#fff; --line:#e6e9f0; --ink:#111827; --muted:#6b7280;
     --ads:#7c3aed; --post:#0ea5e9; --live:#e11d48; --organic:#059669; --unknown:#9ca3af;
-    --hot:#dc2626; --warm:#d97706; --cold:#6b7280;
+    --danger:#dc2626;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -535,9 +498,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .b-ads{background:var(--ads)} .b-post{background:var(--post)} .b-live{background:var(--live)}
   .b-organic{background:var(--organic)} .b-unknown{background:var(--unknown)}
   .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.85)}
-  .score{font-weight:700;font-size:17px;line-height:1.2}
-  .p-hot{color:var(--hot)} .p-warm{color:var(--warm)} .p-cold{color:var(--cold)}
-  .prio{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+  .kind{font-weight:800;font-size:12px;letter-spacing:.3px}
+  .p-unread{color:var(--danger);font-weight:700}
   .name{font-weight:600}
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--muted)}
   .snip{color:#374151;font-size:13px;max-width:330px}
@@ -569,13 +531,13 @@ __BANNER__
     <div class="chip" data-f="post">Bài viết <span class="n" id="n-post"></span></div>
     <div class="chip" data-f="live">Livestream <span class="n" id="n-live"></span></div>
     <div class="chip" data-f="organic">Tự nhắn <span class="n" id="n-organic"></span></div>
-    <div class="chip" data-f="hot">Chốt ngay <span class="n" id="n-hot"></span></div>
+    <div class="chip" data-f="unknown">Chưa kiểm tra <span class="n" id="n-unknown"></span></div>
     <input type="search" id="q" placeholder="Tìm theo tên, PSID, SĐT, nội dung tin…">
   </div>
   <table>
     <thead>
       <tr>
-        <th data-sort="score">Ưu tiên</th>
+        <th data-sort="source">Loại tin</th>
         <th data-sort="source">Nguồn</th>
         <th data-sort="name">Khách</th>
         <th class="hide-sm" data-sort="page_name">Page</th>
@@ -591,18 +553,22 @@ __BANNER__
     <span><i style="background:var(--ads)"></i>Quảng cáo — có ad_id / referral / campaign</span>
     <span><i style="background:var(--post)"></i>Bài viết — có post_id hoặc type = comment</span>
     <span><i style="background:var(--live)"></i>Livestream — có live_video / has_livestream_order</span>
-    <span><i style="background:var(--organic)"></i>Tự nhắn — INBOX không có dấu hiệu nào</span>
+    <span><i style="background:var(--organic)"></i>Tự nhắn — đã đọc tin nhắn, không có dấu hiệu nào</span>
+    <span><i style="background:var(--unknown)"></i>Chưa kiểm tra — chưa đọc được tin nhắn (không đoán)</span>
   </div>
 </div>
 <footer>
-  Điểm ưu tiên = chưa đọc + mới tương tác + có SĐT + số tin + ý định mua + nguồn (quảng cáo được cộng nhiều hơn).
-  Độ tin cậy: <b>cao</b> = có mã/định danh rõ ràng, <b>trung bình</b> = chỉ dựa vào tag hoặc type, <b>thấp</b> = suy đoán.
+  Không chấm điểm: mỗi hội thoại chỉ được gắn <b>loại tin</b> khi có bằng chứng trong dữ liệu Pancake
+  (ad_click kèm ad_id → quảng cáo; post_attachments/comment hoặc type = COMMENT → bài viết;
+  cờ livestream → livestream; đã đọc tin nhắn mà không có gì → tự nhắn; chưa đọc → chưa kiểm tra).
 </footer>
 <script id="data" type="application/json">__DATA__</script>
 <script>
 const rows = JSON.parse(document.getElementById('data').textContent);
 const tb = document.getElementById('tb');
-let filter = 'all', query = '', sortKey = 'score', sortDir = -1;
+const ORDER = ['ads','post','live','organic','unknown'];
+let filter = 'all', query = '', sortKey = 'source', sortDir = 1;
+const byType = (a, b) => ORDER.indexOf(a.source) - ORDER.indexOf(b.source) || (b.at || 0) - (a.at || 0);
 
 const count = fn => rows.filter(fn).length;
 document.getElementById('n-all').textContent = rows.length;
@@ -610,13 +576,13 @@ document.getElementById('n-all').textContent = rows.length;
   const el = document.getElementById('n-' + s);
   if (el) el.textContent = count(r => r.source === s);
 });
-document.getElementById('n-hot').textContent = count(r => r.prio_key === 'hot');
+document.getElementById('n-unknown').textContent = count(r => r.source === 'unknown');
 
 const STATS = [
   ['Tổng tệp khách', rows.length],
   ['Từ quảng cáo', count(r => r.source === 'ads')],
   ['Từ bài viết', count(r => r.source === 'post')],
-  ['Chốt ngay', count(r => r.prio_key === 'hot')],
+  ['Chưa kiểm tra', count(r => r.source === 'unknown')],
   ['Chưa đọc', count(r => r.unread > 0)],
 ];
 document.getElementById('cards').innerHTML = STATS.map(([k, v]) =>
@@ -626,8 +592,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function passes(r){
-  if (filter === 'hot' && r.prio_key !== 'hot') return false;
-  if (filter !== 'all' && filter !== 'hot' && r.source !== filter) return false;
+  if (filter !== 'all' && r.source !== filter) return false;
   if (!query) return true;
   const hay = [r.name, r.psid, r.phone, r.snippet, r.page_name, r.source_label,
                (r.tags||[]).join(' '), (r.evidence||[]).join(' ')].join(' ').toLowerCase();
@@ -635,19 +600,20 @@ function passes(r){
 }
 
 function render(){
-  const list = rows.filter(passes).sort((a, b) => {
+  const list = rows.filter(passes);
+  if (sortKey === 'source') list.sort(byType);
+  else list.sort((a, b) => {
     let x = a[sortKey], y = b[sortKey];
     if (typeof x === 'string') return String(x).localeCompare(String(y)) * sortDir;
-    return (x - y) * sortDir;
+    return ((x || 0) - (y || 0)) * sortDir;
   });
   if (!list.length){ tb.innerHTML = '<tr><td colspan="8" class="empty">Không có tệp khách nào khớp.</td></tr>'; return; }
   tb.innerHTML = list.map(r => {
     const ev = (r.evidence || []).length
-      ? `<details><summary>${r.evidence.length} dấu hiệu</summary><ul>${r.evidence.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` +
-        ((r.reasons || []).length ? `<ul>${r.reasons.map(e => `<li>điểm: ${esc(e)}</li>`).join('')}</ul>` : '') + `</details>`
+      ? `<details><summary>${r.evidence.length} căn cứ</summary><ul>${r.evidence.map(e => `<li>${esc(e)}</li>`).join('')}</ul></details>`
       : '<span class="mono">không có</span>';
     return `<tr>
-      <td><div class="score p-${r.prio_key}">${r.score}</div><div class="prio p-${r.prio_key}">${esc(r.prio)}</div></td>
+      <td><div class="kind b-${r.source}" style="color:var(--${r.source})">${esc(r.source_label)}</div></td>
       <td><span class="badge b-${r.source}"><span class="dot"></span>${esc(r.source_label)}</span>
           <span class="conf ${r.confidence_key}">tin cậy: ${esc(r.confidence)}</span></td>
       <td><div class="name">${esc(r.name)}</div>
@@ -655,7 +621,7 @@ function render(){
       <td class="hide-sm"><div>${esc(r.page_name || '(không rõ)')}</div><div class="mono">${esc(r.page_id)}</div></td>
       <td class="hide-sm">${esc(r.updated_disp)}</td>
       <td class="hide-sm"><div class="snip">${esc(r.snippet)}</div><div class="mono">${r.message_count} tin</div></td>
-      <td>${r.unread > 0 ? `<b class="p-hot">${r.unread}</b>` : '<span class="mono">0</span>'}</td>
+      <td>${r.unread > 0 ? `<b class="p-unread">${r.unread}</b>` : '<span class="mono">0</span>'}</td>
       <td>${ev}</td>
     </tr>`;
   }).join('');
@@ -671,7 +637,7 @@ document.getElementById('q').addEventListener('input', e => { query = e.target.v
 document.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => {
   const k = th.dataset.sort;
   if (sortKey === k) sortDir *= -1;
-  else { sortKey = k; sortDir = (k === 'score' || k === 'unread') ? -1 : 1; }
+  else { sortKey = k; sortDir = (k === 'unread' || k === 'updated_at') ? -1 : 1; }
   render();
 }));
 render();
@@ -694,10 +660,10 @@ def print_table(rows):
     if not rows:
         print("Không có dữ liệu.")
         return
-    print(f"{'ĐIỂM':>4}  {'ƯU TIÊN':<10} {'NGUỒN':<12} {'TIN CẬY':<10} {'KHÁCH':<20} {'CẬP NHẬT':<17} TIN CUỐI")
+    print(f"{'LOẠI TIN':<13} {'TIN CẬY':<12} {'KHÁCH':<20} {'CẬP NHẬT':<17} TIN CUỐI")
     print("-" * 124)
-    for r in sorted(rows, key=lambda x: -x["score"]):
-        print(f"{r['score']:>4}  {r['prio']:<10} {r['source_label']:<12} {r['confidence']:<10} "
+    for r in sorted(rows, key=sort_rows):
+        print(f"{r['source_label']:<13} {r['confidence']:<12} "
               f"{clip(r['name'], 20):<20} {r['updated_disp']:<17} {clip(r['snippet'], 34)}")
 
 
@@ -709,7 +675,6 @@ def main(argv=None):
     ap.add_argument("--out-dir", default="reports", help="thư mục xuất báo cáo (mặc định: reports)")
     ap.add_argument("--prefix", default=None, help="tiền tố tên file xuất (mặc định: tên file input)")
     ap.add_argument("--source", help="chỉ xuất nguồn này: ads|post|live|organic|unknown")
-    ap.add_argument("--min-score", type=int, default=None, help="chỉ xuất tệp khách có điểm >= n")
     ap.add_argument("--json", action="store_true", help="in JSON ra stdout")
     ap.add_argument("--no-html", action="store_true", help="không xuất báo cáo HTML")
     ap.add_argument("--explain", action="store_true",
@@ -729,13 +694,12 @@ def main(argv=None):
         return 2
 
     now = parse_dt(args.now) or datetime.now(timezone.utc)
-    rows = [build_row(c, msgs.get(c.get("id"), []), rules, now, args.tz) for c in convs]
-    rows.sort(key=lambda r: -r["score"])
+    rows = [build_row(c, msgs.get(c.get("id"), []), rules, now, args.tz,
+                      checked=(c.get("id") in msgs)) for c in convs]
+    rows.sort(key=sort_rows)
 
     if args.source:
         rows = [r for r in rows if r["source"] == args.source]
-    if args.min_score is not None:
-        rows = [r for r in rows if r["score"] >= args.min_score]
 
     if args.explain:
         print("== Các field có trong dữ liệu (dùng để tìm field nguồn mới) ==")
@@ -768,7 +732,7 @@ def main(argv=None):
         c = {s: sum(1 for r in rows if r["source"] == s) for s in ("ads", "post", "live", "organic", "unknown")}
         subtitle = (f"{len(rows)} tệp khách · quảng cáo {c['ads']} · bài viết {c['post']} · "
                     f"livestream {c['live']} · tự nhắn {c['organic']} · "
-                    f"chốt ngay {sum(1 for r in rows if r['prio_key'] == 'hot')} · "
+                    f"chưa kiểm tra {c['unknown']} · "
                     f"nguồn: {os.path.basename(args.input)}")
         write_html(rows, html_path, subtitle, args.banner)
         print(f"[done] báo cáo HTML → {html_path}")

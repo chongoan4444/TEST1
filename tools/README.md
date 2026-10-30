@@ -1,7 +1,7 @@
 # Phân loại tệp khách theo nguồn (Pancake)
 
 Cho bạn biết **mỗi tệp khách đến từ đâu** — quảng cáo, comment bài viết, livestream hay khách tự nhắn —
-kèm **điểm ưu tiên** để biết chốt ai trước.
+kèm **căn cứ** để bạn tự kiểm tra máy phân loại đúng hay sai (không chấm điểm).
 
 ```
 userscripts/
@@ -183,19 +183,23 @@ tag #83 = Từ quảng cáo → nguồn Quảng cáo
 
 → Bạn kiểm tra được ngay máy phân loại đúng hay sai, không phải tin mù.
 
-## Điểm ưu tiên (0–100)
+## Không chấm điểm — chỉ gắn loại tin khi có bằng chứng
 
-| Tiêu chí | Điểm |
-|---|---|
-| Có tin chưa đọc | +30 |
-| Tương tác cuối < 24h / < 3 ngày | +20 / +10 |
-| Có số điện thoại | +15 |
-| Ý định mua trong tin cuối (`giá`, `bao nhiêu`, `size`, `đặt`, `ship`, `chốt`…) | +20 |
-| Từ quảng cáo / từ bài viết | +10 / +5 |
-| ≥ 3 tin nhắn | +10 |
+Bản 3.3.0 bỏ hẳn cơ chế điểm (trước đây cộng điểm chưa đọc / mới tương tác / có SĐT / ý định mua…).
+Lý do: điểm không nói được **tin này từ đâu tới**, mà đó mới là thứ cần để chốt.
 
-`≥ 70` → **CHỐT NGAY**, `40–69` → **Ưu tiên**, còn lại → **Theo dõi**.
-Sửa toàn bộ trọng số trong `rules.json` mục `weights` / `thresholds`.
+| Loại | Khi nào gắn | Căn cứ (hiện trong tooltip) |
+|---|---|---|
+| **QC** Quảng cáo | có tin nhắn với `attachments[].type = "ad_click"` (kèm `ad_id`) | `tin nhắn 1.attachments[0].type = ad_click · ad_id 1202…` |
+| **BV** Bài viết | attachment có `comment` / `post_attachments`, hoặc hội thoại `type = "COMMENT"` | `hội thoại type = COMMENT (bình luận bài viết)` |
+| **LV** Livestream | chỉ khi có cờ thật: `is_livestream_order` / `has_livestream_order` / `live_video_id` | `tin nhắn 1 có cờ livestream` |
+| **TN** Tự nhắn | **đã đọc tin nhắn** và không có dấu hiệu nào ở trên | `đã đọc 15 tin nhắn: không có ad_click / bài viết / livestream` |
+| **?** Chưa kiểm tra | **chưa đọc được tin nhắn** → không đoán | `chưa đọc tin nhắn của hội thoại này → chưa kết luận` |
+
+Đây là lý do bản cũ hiện **TN rồi bấm vào lại thành QC**: chưa đọc tin nhắn thì nó mặc định
+"tự nhắn"; đọc xong mới thấy `ad_click`. Giờ chưa đọc thì hiện `?`, đọc xong mới kết luận.
+
+Muốn chắc chắn có bằng chứng: mở tooltip trên nhãn, hoặc xem cột **Căn cứ** trong báo cáo HTML.
 
 ## Map tag → nguồn (tăng độ chính xác)
 
@@ -208,8 +212,6 @@ Pancake trả `tags: [4, 83, 172]` — chỉ là ID số. Tạo `rules.json`:
     "83":  { "name": "Từ quảng cáo", "source": "ads" },
     "172": { "name": "Khách live",   "source": "live" }
   },
-  "weights": { "unread": 30, "recent_24h": 20 },
-  "thresholds": { "hot": 70, "warm": 40 }
 }
 ```
 
@@ -221,7 +223,6 @@ Cách tìm tag id: mở Pancake → Hội thoại → bấm vào tag → xem URL
 | Cờ | Ý nghĩa |
 |---|---|
 | `--source ads` | chỉ xuất khách từ quảng cáo (`ads\|post\|live\|organic\|unknown`) |
-| `--min-score 70` | chỉ xuất khách đáng chốt |
 | `--json` | in JSON thay vì bảng (để nối vào hệ thống khác) |
 | `--explain` | liệt kê mọi field trong dữ liệu, tìm field nguồn mới |
 | `--rules file.json` | dùng cấu hình riêng |

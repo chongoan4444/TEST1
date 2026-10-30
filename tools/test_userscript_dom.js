@@ -6,7 +6,7 @@
  * Kiểm tra:
  *   1. chỉ gắn nhãn cho các dòng ĐANG HIỂN THỊ (dòng ngoài khung nhìn: không nhãn)
  *   2. cuộn danh sách -> nhãn xuất hiện ở các dòng mới
- *   3. tự xem tin nhắn -> hội thoại quảng cáo đổi từ "TN…" sang "QC"
+ *   3. tự xem tin nhắn -> hội thoại quảng cáo đổi từ "?" (chưa kiểm tra) sang "QC"
  *   4. Alt+O ẩn/hiện tất cả; nút ▭ ẩn bảng nhưng NHÃN VẪN CHẠY; nút 🏷️/▤ mở lại
  *   5. khách mới load vào -> có nhãn ngay
  *
@@ -85,7 +85,8 @@ const pressAltO = () => doc.dispatchEvent(new window.KeyboardEvent('keydown',
   // --- bắt trạng thái NGAY SAU khi load (chưa kịp xem tin nhắn)
   await sleep(300);
   const early = rows().filter(chipOf).map(r => chipOf(r).textContent);
-  check(early.some(c => c.indexOf('…') >= 0), 'trước khi xem tin nhắn: nhãn có dấu … = "chưa chắc" (' + early.slice(0, 3).join(' | ') + ')');
+  check(early.some(c => c === '?'), 'trước khi xem tin nhắn: nhãn là "?" (không đoán bừa) (' + early.slice(0, 3).join(' | ') + ')');
+  check(early.every(c => c !== 'TN'), 'trước khi xem tin nhắn KHÔNG gắn "TN" (lỗi TN → QC)');
   const earlyAdChip = chipOf(rows().find(r => rowName(r) === 'Trần Bảo'));
   const earlyAd = earlyAdChip ? earlyAdChip.textContent : null;
 

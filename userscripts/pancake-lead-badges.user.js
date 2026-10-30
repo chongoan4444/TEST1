@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.2.1
-// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên cho các hội thoại ĐANG HIỂN THỊ trên Pancake. Alt+O bật/tắt. Tự dò lại DOM khi Pancake đổi giao diện.
+// @version      3.3.0
+// @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn cho các hội thoại ĐANG HIỂN THỊ trên Pancake — chỉ khi có bằng chứng thật, không chấm điểm, chưa đọc tin nhắn thì hiện "?". Alt+O bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
 // @match        https://*.pancake.vn/*
@@ -34,11 +34,6 @@
     selList: '', selRow: '', selName: '', selSnippet: '', selTag: '',
     tagMap: {},             // {'83': {name:'Từ quảng cáo', source:'ads'}}  (tag id từ API)
     tagNameSource: {},      // {'QC': 'ads', 'live': 'live'}  (tên tag hiện trên dòng chat)
-    weights: { unread: 30, recent_24h: 20, recent_3d: 10, has_phone: 15, many_msgs: 10, intent: 20, source_ads: 10, source_post: 5 },
-    thresholds: { hot: 70, warm: 40 },
-    intent: ['gia', 'bao nhieu', 'nhieu tien', 'size', 'mau', 'con hang', 'con khong', 'dat hang', 'dat',
-      'mua', 'lay', 'ship', 'giao', 'ib', 'inbox', 'chot', 'order', 'sdt', 'so dien thoai', 'dia chi',
-      'chuyen khoan', 'ck', 'giam gia', 'khuyen mai', 'sale', 'ai ban', 'con size', 'ship cod'],
   };
 
   const CFG = (function () {
@@ -57,16 +52,19 @@
   const SOURCE_LABEL = { ads: 'Quảng cáo', post: 'Bài viết', live: 'Livestream', organic: 'Tự nhắn', unknown: 'Chưa rõ' };
   const SOURCE_SHORT = { ads: 'QC', post: 'BV', live: 'LV', organic: 'TN', unknown: '?' };
   const SOURCE_COLOR = { ads: '#7c3aed', post: '#0ea5e9', live: '#e11d48', organic: '#059669', unknown: '#6b7280' };
-  const CONF_LABEL = { high: 'cao', mid: 'trung bình', low: 'thấp' };
-  const PRIO_LABEL = { hot: 'CHỐT NGAY', warm: 'Ưu tiên', cold: 'Theo dõi' };
+  const CONF_LABEL = { high: 'chắc chắn', mid: 'khá chắc', low: 'thấp', none: 'chưa kiểm tra' };
+  const SOURCE_ORDER = ['ads', 'post', 'live', 'organic', 'unknown'];
 
-  // Tín hiệu QUẢNG CÁO thật của Pancake: message.attachments[].type = "ad_click" + ad_id
-  const AD_KEYS = ['ad_id', 'ad_ids', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name', 'ad_name',
-    'ad_name_id', 'ads_context_data', 'referral', 'ad_referral', 'is_ad', 'from_ad', 'adgroup_id',
-    'source_ad_id', 'click_from'];
-  const AD_TYPE_VALUES = ['ad_click', 'ad_referral', 'ad'];
+  // Bằng chứng THẬT, kiểm tra trên 947 hội thoại + 163 tin nhắn trong loaddanhsach.har / batmesss.har:
+  //   - 22 tin có attachments[].type = "ad_click" (kèm ad_id) -> quảng cáo
+  //   - 3 attachment có post_attachments/comment (chia sẻ/bình luận bài viết) -> bài viết
+  //   - 2 hội thoại type = "COMMENT" -> bình luận bài viết
+  //   - is_livestream_order / has_livestream_order / live_video_status: KHÔNG có giá trị nào (toàn null)
+  //   - extra_info, post, post_id của danh sách hội thoại: LUÔN rỗng -> không dùng để đoán
+  const AD_KEYS = ['ad_id', 'ad_ids', 'ads_context_data', 'referral', 'ad_referral', 'is_ad', 'from_ad'];
+  const AD_TYPE_VALUES = ['ad_click', 'ad_referral'];
   const POST_KEYS = ['post_id', 'post', 'comment_id', 'post_permalink'];
-  const LIVE_KEYS = ['has_livestream_order', 'is_livestream_order', 'live_video_id'];
+  const LIVE_KEYS = ['is_livestream_order', 'has_livestream_order', 'live_video_id', 'live_video_status'];
   const COMMENT_HINTS = ['COMMENT', 'REPLY', 'POST_COMMENT'];
 
   const LOG = (...a) => console.log('%c[lead-source]', 'color:#7c3aed;font-weight:600', ...a);
@@ -116,101 +114,132 @@
     return out;
   }
 
-  /** -> { source, confidence, evidence[] } */
-  function classify(conv, msgs) {
+  /**
+   * -> { source, confidence, evidence[] }
+   *
+   * NGUYÊN TẮC: chỉ kết luận khi có bằng chứng thật trong dữ liệu Pancake.
+   *   ads     : message.attachments[].type = "ad_click" (kèm ad_id)      -> chắc chắn
+   *   post    : attachment có post_attachments/comment, hoặc hội thoại type = COMMENT
+   *   live    : chỉ khi có cờ is_livestream_order / has_livestream_order / live_video_id
+   *   organic : ĐÃ đọc tin nhắn và không có dấu hiệu nào ở trên
+   *   unknown : CHƯA đọc tin nhắn -> KHÔNG đoán (đây chính là lỗi "hiện TN, bấm vào lại thành QC")
+   */
+  function classify(conv, msgs, checked) {
     msgs = msgs || [];
     const evidence = [];
     let source = null;
-    let confidence = 'low';
+    let confidence = 'high';
 
-    const convType = String(conv.type || '').toUpperCase();
-    const msgTypes = {};
-    msgs.forEach(m => {
-      if (!m || typeof m !== 'object') return;
-      ['type', 'message_type', 'verb'].forEach(k => { if (typeof m[k] === 'string') msgTypes[m[k].toUpperCase()] = 1; });
-    });
-    const typesList = Object.keys(msgTypes);
-
-    // ---- 1. Quảng cáo: attachments[].ad_id / type = ad_click
-    let adHits = [];
-    const blobs = [['extra_info', conv.extra_info], ['messages', msgs]];
-    blobs.forEach(([name, blob]) => {
-      if (!blob) return;
-      deepFind(blob, AD_KEYS).forEach(hit => {
-        if (isEmptyish(hit.value)) return;
-        adHits.push(name + '.' + hit.path + ' = ' + jsonify(hit.value));
-      });
-    });
+    // ---------- 1. QUẢNG CÁO ----------
+    const adHits = [];
     msgs.forEach((m, i) => {
-      (m && m.attachments || []).forEach((a, j) => {
-        if (a && typeof a === 'object' && AD_TYPE_VALUES.indexOf(String(a.type || '').toLowerCase()) >= 0) {
-          adHits.push('messages[' + i + '].attachments[' + j + '].type = ' + a.type);
+      if (!m || !Array.isArray(m.attachments)) return;
+      m.attachments.forEach((a, j) => {
+        if (!a || typeof a !== 'object') return;
+        const t = String(a.type || '').toLowerCase();
+        const at = 'tin nhắn ' + (i + 1) + '.attachments[' + j + ']';
+        if (AD_TYPE_VALUES.indexOf(t) >= 0) {
+          adHits.push(at + '.type = ' + a.type + (a.ad_id ? ' · ad_id ' + a.ad_id : ''));
+        } else if (!isEmptyish(a.ad_id)) {
+          adHits.push(at + '.ad_id = ' + jsonify(a.ad_id));
         }
       });
     });
-    adHits = adHits.filter((h, i) => !adHits.some((o, j) => j !== i && o.split(' = ')[0].indexOf(h.split(' = ')[0] + '.') === 0));
+    deepFind({ extra_info: conv.extra_info }, AD_KEYS).forEach(hit => {
+      if (isEmptyish(hit.value)) return;
+      adHits.push('extra_info.' + hit.path + ' = ' + jsonify(hit.value));
+    });
     if (adHits.length) {
-      source = 'ads'; confidence = 'high';
-      evidence.push.apply(evidence, adHits.slice(0, 4));
+      source = 'ads';
+      evidence.push.apply(evidence, adHits.slice(0, 3));
     }
 
-    // ---- 2. Comment bài viết
+    // ---------- 2. BÀI VIẾT (chia sẻ / bình luận bài viết) ----------
     const postHits = [];
-    deepFind({ extra_info: conv.extra_info, conv: { post_id: conv.post_id, post: conv.post } }, POST_KEYS)
-      .forEach(hit => { if (!isEmptyish(hit.value)) postHits.push(hit.path + ' = ' + jsonify(hit.value)); });
-    const isCommentType = COMMENT_HINTS.some(h => convType.indexOf(h) >= 0) ||
-      typesList.some(t => COMMENT_HINTS.some(h => t.indexOf(h) >= 0));
-    if (postHits.length || isCommentType) {
-      if (!source) { source = 'post'; confidence = postHits.length ? 'high' : 'mid'; }
-      else evidence.push('(đồng thời có dấu hiệu comment)');
-      evidence.push.apply(evidence, postHits.slice(0, 3));
-      if (isCommentType) evidence.push('type = ' + (convType || typesList.join('/')) + ' → comment');
-    }
-
-    // ---- 3. Livestream
-    const liveHits = deepFind({ conv: conv, messages: msgs }, LIVE_KEYS).filter(h => !isEmptyish(h.value));
-    const liveType = typesList.some(t => t.indexOf('LIVE') >= 0) || convType.indexOf('LIVE') >= 0;
-    if (liveHits.length || liveType) {
-      if (!source) { source = 'live'; confidence = 'mid'; }
-      if (liveHits.length) evidence.push(liveHits[0].path + ' = ' + jsonify(liveHits[0].value));
-    }
-
-    // ---- 4. Tag: id (từ API) và tên (đọc từ dòng chat)
-    const namedTags = [];
-    (conv.tags || []).forEach(tid => {
-      const info = CFG.tagMap[String(tid)];
-      if (!info) return;
-      if (info.name && info.name !== '(chưa rõ)') namedTags.push(info.name + ' #' + tid);
-      if (info.source && SOURCE_LABEL[info.source]) {
-        if (!source) { source = info.source; confidence = 'mid'; }
-        else if (info.source === source) { confidence = 'high'; }
-        evidence.push('tag #' + tid + ' = ' + (info.name || '?') + ' → ' + SOURCE_LABEL[info.source]);
-      }
-    });
-    (conv.domTags || []).forEach(rawName => {
-      const key = stripAccents(rawName);
-      let hit = null;
-      Object.keys(CFG.tagNameSource || {}).forEach(k => {
-        if (hit) return;
-        if (stripAccents(k) === key) hit = CFG.tagNameSource[k];
+    msgs.forEach((m, i) => {
+      if (!m || !Array.isArray(m.attachments)) return;
+      m.attachments.forEach((a, j) => {
+        if (!a || typeof a !== 'object') return;
+        const t = String(a.type || '').toLowerCase();
+        if (AD_TYPE_VALUES.indexOf(t) >= 0) return;                 // đã tính là quảng cáo
+        if (a.comment && typeof a.comment === 'object' && (a.comment.content || a.comment.msg_id)) {
+          postHits.push('tin nhắn ' + (i + 1) + ': bình luận bài viết "' +
+            String(a.comment.content || '').replace(/\s+/g, ' ').slice(0, 40) + '"');
+        } else if (Array.isArray(a.post_attachments) || a.post_type) {
+          postHits.push('tin nhắn ' + (i + 1) + ': chia sẻ bài viết' + (a.post_type ? ' (' + a.post_type + ')' : ''));
+        }
       });
-      if (!hit || !SOURCE_LABEL[hit]) return;
-      if (!source) { source = hit; confidence = 'mid'; }
-      else if (hit === source) { confidence = 'high'; }
-      evidence.push('tag trên dòng chat: "' + rawName + '" → ' + SOURCE_LABEL[hit]);
     });
-    if (namedTags.length) evidence.push('tags: ' + namedTags.join(', '));
+    const convType = String(conv.type || '').toUpperCase();
+    if (COMMENT_HINTS.some(h => convType.indexOf(h) >= 0)) {
+      postHits.push('hội thoại type = ' + convType + ' (bình luận bài viết)');
+    }
+    deepFind({ conv: { post: conv.post, post_id: conv.post_id } }, POST_KEYS).forEach(hit => {
+      if (!isEmptyish(hit.value)) postHits.push(hit.path + ' = ' + jsonify(hit.value));
+    });
+    if (!source && postHits.length) {
+      source = 'post';
+      evidence.push.apply(evidence, postHits.slice(0, 3));
+    }
 
-    // ---- 5. Mặc định
+    // ---------- 3. LIVESTREAM (chỉ khi Pancake gắn cờ) ----------
+    const liveHits = [];
+    const liveFlag = o => o && (o.is_livestream_order === true || o.has_livestream_order === true ||
+      !isEmptyish(o.live_video_id) || !isEmptyish(o.live_video_status));
+    if (liveFlag(conv)) liveHits.push('hội thoại có has_livestream_order = true');
+    msgs.forEach((m, i) => {
+      if (liveFlag(m)) liveHits.push('tin nhắn ' + (i + 1) + ' có cờ livestream');
+      (m && Array.isArray(m.attachments) ? m.attachments : []).forEach(a => {
+        if (a && /live/i.test(String(a.type || ''))) liveHits.push('tin nhắn ' + (i + 1) + '.attachments.type = ' + a.type);
+      });
+    });
+    if (!source && liveHits.length) {
+      source = 'live';
+      confidence = 'mid';
+      evidence.push.apply(evidence, liveHits.slice(0, 2));
+    }
+
+    // ---------- 4. Tag do BẠN tự cấu hình (chỉ khi chưa có bằng chứng dữ liệu) ----------
     if (!source) {
-      if (convType === '' || convType === 'INBOX') {
-        source = 'organic'; confidence = 'low';
-        evidence.push('type = INBOX, không có dấu hiệu ads / post / live');
-      } else {
-        source = 'unknown'; confidence = 'low';
-        evidence.push('type = ' + convType + ' (chưa nhận diện được)');
+      (conv.domTags || []).forEach(rawName => {
+        if (source) return;
+        const key = stripAccents(rawName);
+        Object.keys(CFG.tagNameSource || {}).forEach(k => {
+          if (source) return;
+          if (stripAccents(k) === key && SOURCE_LABEL[CFG.tagNameSource[k]]) {
+            source = CFG.tagNameSource[k];
+            confidence = 'mid';
+            evidence.push('tag trên dòng chat: "' + rawName + '" → ' + SOURCE_LABEL[source] + ' (do bạn cấu hình)');
+          }
+        });
+      });
+      if (!source) {
+        (conv.tags || []).forEach(tid => {
+          const info = CFG.tagMap[String(tid)];
+          if (source || !info || !SOURCE_LABEL[info.source]) return;
+          source = info.source;
+          confidence = 'mid';
+          evidence.push('tag #' + tid + ' = ' + (info.name || '?') + ' → ' + SOURCE_LABEL[source] + ' (do bạn cấu hình)');
+        });
       }
     }
+
+    // ---------- 5. CHƯA ĐỌC TIN NHẮN -> KHÔNG ĐOÁN ----------
+    if (!source) {
+      const seen = checked || msgs.length > 0;
+      if (!seen) {
+        source = 'unknown';
+        confidence = 'none';
+        evidence.push('chưa đọc tin nhắn của hội thoại này → chưa kết luận');
+      } else {
+        source = 'organic';
+        confidence = 'high';
+        evidence.push(msgs.length
+          ? 'đã đọc ' + msgs.length + ' tin nhắn: không có ad_click / bài viết / livestream'
+          : 'hội thoại chưa có tin nhắn nào (đã kiểm tra)');
+      }
+    }
+
     return { source: source, confidence: confidence, evidence: evidence };
   }
 
@@ -220,8 +249,8 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  function buildLead(conv, msgs, now) {
-    const c = classify(conv, msgs);
+  function buildLead(conv, msgs, now, checked) {
+    const c = classify(conv, msgs, checked);
     const cust = (conv.customers && conv.customers[0]) || {};
     const from = conv.from || {};
     const name = cust.name || from.name || '(không tên)';
@@ -231,35 +260,11 @@
     const snippet = conv.snippet || '';
     const unread = Number(conv.unread_count || 0) || 0;
     const nMsgs = Number(conv.message_count || 0) || 0;
-    const w = CFG.weights;
-    let score = 0;
-    const reasons = [];
-
-    if (unread > 0) { score += w.unread; reasons.push('chưa đọc ' + unread + ' tin +' + w.unread); }
-    const ref = lastCust || updated;
-    if (ref) {
-      const ageH = (now - ref.getTime()) / 3600000;
-      if (ageH <= 24) { score += w.recent_24h; reasons.push('tương tác < 24h +' + w.recent_24h); }
-      else if (ageH <= 72) { score += w.recent_3d; reasons.push('tương tác < 3 ngày +' + w.recent_3d); }
-    }
-    if (conv.has_phone || phones.length) { score += w.has_phone; reasons.push('có SĐT +' + w.has_phone); }
-    if (nMsgs >= 3) { score += w.many_msgs; reasons.push(nMsgs + ' tin nhắn +' + w.many_msgs); }
-    const norm = stripAccents(snippet);
-    const hits = CFG.intent.filter(k => {
-      const kk = stripAccents(k).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp('(^|[^a-z0-9])' + kk + '([^a-z0-9]|$)').test(norm);
-    });
-    if (hits.length) { score += w.intent; reasons.push('ý định mua: ' + hits.slice(0, 3).join(', ') + ' +' + w.intent); }
-    if (c.source === 'ads') { score += w.source_ads; reasons.push('từ quảng cáo +' + w.source_ads); }
-    else if (c.source === 'post') { score += w.source_post; reasons.push('từ bài viết +' + w.source_post); }
-    score = Math.max(0, Math.min(100, score));
-
-    const prioKey = score >= CFG.thresholds.hot ? 'hot' : (score >= CFG.thresholds.warm ? 'warm' : 'cold');
 
     return {
       id: conv.id || '',
       name: name,
-      psid: String(conv.from_psid || cust.fb_id || '' || ''),
+      psid: String(conv.from_psid || cust.fb_id || ''),
       phone: phones.length ? String(phones[0]) : '',
       pageId: String(conv.page_id || ''),
       pageName: (conv.last_sent_by && conv.last_sent_by.name) || '',
@@ -271,12 +276,10 @@
       snippet: snippet,
       messageCount: nMsgs,
       unread: unread,
-      score: score,
-      prio: PRIO_LABEL[prioKey],
-      prioKey: prioKey,
+      checked: !!(checked || (msgs && msgs.length)),
       updatedAt: updated ? updated.toISOString() : '',
       lastCustomerAt: lastCust ? lastCust.toISOString() : '',
-      reasons: reasons,
+      at: (updated || lastCust) ? (updated || lastCust).getTime() : 0,
       enriched: !!(msgs && msgs.length),
     };
   }
@@ -294,7 +297,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.2.1';
+  const VERSION = '3.3.0';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -381,6 +384,12 @@
 
   function ingestMessagesFor(id, list, url) {
     if (!id || !Array.isArray(list)) return;
+    // API trả rỗng nhưng hội thoại có tin -> coi như CHƯA đọc (không kết luận "tự nhắn" oan)
+    const known = state.convs.get(id);
+    if (!list.length && known && Number(known.message_count || 0) > 0) {
+      state.enriching.delete(id);
+      return;
+    }
     state.msgs.set(id, list);
     if (url && !state.msgUrlTpl && RE_MESSAGES_URL.test(url)) state.msgUrlTpl = url;
     state.enriching.delete(id);
@@ -456,8 +465,11 @@
       }
       return url;
     }
-    const q = (custId && /^[0-9a-f-]{30,}$/i.test(custId)) ? '?customer_id=' + encodeURIComponent(custId) : '?';
-    return '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations/' + encodeURIComponent(convId) + '/messages' + q;
+    // URL thật của Pancake:
+    // /api/v1/pages/<page>/conversations/<conv>/messages?customer_id=<uuid>&user_view=true&is_new_api=true&separate_pos=true
+    const q = (custId && /^[0-9a-f-]{30,}$/i.test(custId)) ? '?customer_id=' + encodeURIComponent(custId) + '&' : '?';
+    return '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations/' + encodeURIComponent(convId) +
+      '/messages' + q + 'user_view=true&is_new_api=true&separate_pos=true';
   }
 
   function enrich(conv) {
@@ -678,26 +690,25 @@
   let decorTimer = null;
   let lastDecor = 0;
 
-  function chipText(lead, pending) {
-    const base = SOURCE_SHORT[lead.source] + ' ' + lead.score;
-    return (lead.prioKey === 'hot' ? '🔥 ' : '') + base + (pending ? '…' : '');
+  function chipText(lead) {
+    return SOURCE_SHORT[lead.source] || '?';
   }
 
-  function chipTitle(lead, pending) {
-    return SOURCE_LABEL[lead.source] + ' · ' + lead.score + ' điểm · ' + lead.prio + ' · tin cậy ' + CONF_LABEL[lead.confidence] +
-      (pending ? '\n(đang xem tin nhắn để chắc chắn hơn)' : '') +
-      (lead.evidence.length ? '\n\nBằng chứng:\n• ' + lead.evidence.join('\n• ') : '') +
-      (lead.reasons.length ? '\n\nĐiểm:\n• ' + lead.reasons.join('\n• ') : '') +
+  function chipTitle(lead) {
+    const conf = lead.confidence === 'none' ? 'chưa kiểm tra' : CONF_LABEL[lead.confidence];
+    return SOURCE_LABEL[lead.source] + ' · ' + conf +
+      (lead.source === 'unknown' ? '\n(đang tải tin nhắn để kiểm tra — không đoán trước)' : '') +
+      (lead.evidence.length ? '\n\nCăn cứ:\n• ' + lead.evidence.join('\n• ') : '') +
       '\n\n(Alt+O để ẩn/hiện)';
   }
 
-  function makeChip(lead, pending) {
+  function makeChip(lead) {
     const chip = document.createElement('span');
     chip.className = '__ls_chip';
     chip.dataset.lsId = lead.id;
     chip.dataset.lsSource = lead.source;
-    chip.textContent = chipText(lead, pending);
-    chip.title = chipTitle(lead, pending);
+    chip.textContent = chipText(lead);
+    chip.title = chipTitle(lead);
     chip.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;' +
       'background:' + SOURCE_COLOR[lead.source] + ';color:#fff;border-radius:999px;padding:0 5px;' +
       'font-size:9.5px;font-weight:700;line-height:15px;height:15px;margin-left:5px;' +
@@ -706,14 +717,14 @@
     return chip;
   }
 
-  function updateChip(chip, lead, pending) {
-    const t = chipText(lead, pending);
+  function updateChip(chip, lead) {
+    const t = chipText(lead);
     if (chip.textContent !== t) chip.textContent = t;
     if (chip.dataset.lsSource !== lead.source) {
       chip.dataset.lsSource = lead.source;
       chip.style.background = SOURCE_COLOR[lead.source];
     }
-    const title = chipTitle(lead, pending);
+    const title = chipTitle(lead);
     if (chip.title !== title) chip.title = title;
   }
 
@@ -733,19 +744,20 @@
       else if (row.classList.contains('unread') && !conv.unread_count) conv = Object.assign({}, conv, { unread_count: 1 });
 
       const msgs = state.msgs.get(convId);
-      const lead = buildLead(conv, msgs || [], now);
-      const pending = !msgs && conv.type !== 'COMMENT' && !conv._fromDom;
-      if (pending && conv.type !== 'COMMENT') needEnrich.push(conv);
+      const checked = state.msgs.has(convId);
+      const lead = buildLead(conv, msgs || [], now, checked);
+      const pending = !checked;                       // chưa đọc tin nhắn -> nhãn "?" chứ không đoán
+      if (pending && CFG.enrichVisible) needEnrich.push(conv);
 
       let chip = chips.get(convId);
-      if (chip && chip.parentElement && row.contains(chip)) { updateChip(chip, lead, pending); dom.labeled++; return; }
+      if (chip && chip.parentElement && row.contains(chip)) { updateChip(chip, lead); dom.labeled++; return; }
       if (chip) chips.delete(convId);
       chip = row.querySelector('.__ls_chip');
-      if (chip) { chips.set(convId, chip); updateChip(chip, lead, pending); dom.labeled++; return; }
+      if (chip) { chips.set(convId, chip); updateChip(chip, lead); dom.labeled++; return; }
 
       // 3 đường gắn, luôn cố cho nhãn xuất hiện thay vì bỏ qua dòng
       const nameEl = nameNode(row);
-      const c = makeChip(lead, pending);
+      const c = makeChip(lead);
       let placed = false;
       if (nameEl) {
         try { nameEl.insertAdjacentElement('afterend', c); placed = true; } catch (e) {}
@@ -818,9 +830,8 @@
     .list { overflow-y: auto; padding: 5px; }
     .item { display: flex; gap: 7px; padding: 7px; border-radius: 9px; cursor: pointer; align-items: flex-start; }
     .item:hover { background: #f7f8fd; }
-    .score { min-width: 32px; text-align: center; font-weight: 700; font-size: 14px; line-height: 1.15; }
-    .score small { display: block; font-size: 8.5px; font-weight: 700; text-transform: uppercase; }
-    .hot { color: #dc2626; } .warm { color: #d97706; } .cold { color: #6b7280; }
+    .kind { min-width: 30px; text-align: center; font-weight: 800; font-size: 12px; line-height: 1.2;
+             letter-spacing: .3px; padding-top: 1px; }
     .mid { flex: 1; min-width: 0; }
     .row1 { display: flex; align-items: center; gap: 5px; }
     .badge { color: #fff; border-radius: 999px; padding: 1px 6px; font-size: 10px; font-weight: 700; }
@@ -900,6 +911,13 @@
     }
   }
 
+  // xếp theo LOẠI TIN (quảng cáo → bài viết → live → tự nhắn → chưa kiểm tra), cùng loại thì mới nhất trước
+  function sortLeads(a, b) {
+    const d = SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source);
+    if (d) return d;
+    return (b.at || 0) - (a.at || 0);
+  }
+
   function legendHtml() {
     if (!CFG.showLegend) return '';
     const sym = (code, color, label) =>
@@ -909,18 +927,16 @@
       sym('BV', SOURCE_COLOR.post, 'Bài viết') +
       sym('LV', SOURCE_COLOR.live, 'Livestream') +
       sym('TN', SOURCE_COLOR.organic, 'Tự nhắn') +
-      sym('?', SOURCE_COLOR.unknown, 'Chưa rõ') +
-      sym('🔥', '#dc2626', 'Chốt ngay') +
-      '<span class="sym">… = chưa xem tin nhắn</span>' +
+      sym('?', SOURCE_COLOR.unknown, 'Chưa kiểm tra') +
+      '<span class="sym">? = chưa đọc tin nhắn (không đoán trước)</span>' +
       '</div>';
   }
 
   function itemHtml(r, pending) {
-    const conf = r.confidence === 'high' ? '' : ' · tin cậy ' + CONF_LABEL[r.confidence];
-    const tip = esc(r.evidence.join('\n') + (r.reasons.length ? '\n\n' + r.reasons.join('\n') : ''));
+    const conf = r.confidence === 'high' ? '' : ' · ' + CONF_LABEL[r.confidence];
+    const tip = esc(r.evidence.join('\n') || 'chưa có căn cứ');
     return '<div class="item" data-id="' + esc(r.id) + '" data-act="focus" title="' + tip + '">' +
-      '<div class="score ' + r.prioKey + '">' + r.score +
-      '<small>' + (r.prioKey === 'hot' ? 'CHỐT' : (r.prioKey === 'warm' ? 'ưu tiên' : 'theo dõi')) + '</small></div>' +
+      '<div class="kind" style="color:' + SOURCE_COLOR[r.source] + '">' + SOURCE_SHORT[r.source] + '</div>' +
       '<div class="mid"><div class="row1"><span class="badge" style="background:' + SOURCE_COLOR[r.source] + '">' +
       SOURCE_SHORT[r.source] + '</span><span class="nm">' + esc(r.name) + '</span></div>' +
       '<div class="sn">' + esc(r.snippet) + '</div>' +
@@ -938,16 +954,16 @@
 
     const now = Date.now();
     const all = [];
-    state.convs.forEach((c, id) => all.push(buildLead(c, state.msgs.get(id) || [], now)));
-    all.sort((a, b) => b.score - a.score);
+    state.convs.forEach((c, id) => all.push(buildLead(c, state.msgs.get(id) || [], now, state.msgs.has(id))));
+    all.sort(sortLeads);
 
-    const sig = state.version + '|' + all.length + '|' + all.slice(0, CFG.topN).map(r => r.id + r.score + r.source).join(',');
+    const sig = state.version + '|' + all.length + '|' + all.slice(0, CFG.topN).map(r => r.id + r.source + r.at).join(',');
     if (!force && sig === paintSig) return;
     paintSig = sig;
 
     const counts = { ads: 0, post: 0, live: 0, organic: 0, unknown: 0 };
     all.forEach(r => { counts[r.source] = (counts[r.source] || 0) + 1; });
-    const hot = all.filter(r => r.prioKey === 'hot').length;
+    const unverified = all.filter(r => r.source === 'unknown').length;
 
     const wrap = shadow.getElementById('wrap');
     if (!wrap) return;
@@ -968,7 +984,7 @@
       '<span class="cnt"><i style="background:' + SOURCE_COLOR.post + '"></i>Bài viết <b>' + counts.post + '</b></span>' +
       '<span class="cnt"><i style="background:' + SOURCE_COLOR.live + '"></i>Live <b>' + counts.live + '</b></span>' +
       '<span class="cnt"><i style="background:' + SOURCE_COLOR.organic + '"></i>Tự nhắn <b>' + counts.organic + '</b></span>' +
-      '<span class="cnt"><i style="background:#dc2626"></i>Chốt ngay <b>' + hot + '</b></span></div>' +
+      '<span class="cnt"><i style="background:' + SOURCE_COLOR.unknown + '"></i>Chưa kiểm tra <b>' + unverified + '</b></span></div>' +
       (all.length ? '<div class="list">' + all.slice(0, CFG.topN).map(r => itemHtml(r, !state.msgs.has(r.id))).join('') + '</div>'
         : '<div class="empty">Chưa đọc được danh sách hội thoại.<br>Mở trang <b>Hội thoại</b> của Pancake — script tự đọc '
           + 'dữ liệu và gắn nhãn cho các dòng đang hiển thị.</div>') +
@@ -1025,7 +1041,7 @@
     if (act === 'copy') {
       const lead = buildLead(conv, state.msgs.get(id) || [], Date.now());
       navigator.clipboard.writeText(lead.name + ' | psid ' + lead.psid + ' | ' + lead.sourceLabel + ' | ' +
-        lead.score + ' điểm | ' + lead.snippet.replace(/\n/g, ' '))
+        lead.sourceLabel + ' | ' + lead.evidence.slice(0, 2).join(' ; ') + ' | ' + lead.snippet.replace(/\n/g, ' '))
         .then(() => { btn.textContent = '✅'; setTimeout(() => { btn.textContent = '📋'; }, 1200); })
         .catch(() => {});
       return;
@@ -1164,8 +1180,8 @@
     get visible() { return !!CFG.enabled; },
     get leads() {
       const now = Date.now(), out = [];
-      state.convs.forEach((c, id) => out.push(buildLead(c, state.msgs.get(id) || [], now)));
-      return out.sort((a, b) => b.score - a.score);
+      state.convs.forEach((c, id) => out.push(buildLead(c, state.msgs.get(id) || [], now, state.msgs.has(id))));
+      return out.sort(sortLeads);
     },
     get visibleRows() { return visibleRows().map(convIdOf).filter(Boolean); },
     toggle: () => setEnabled(!CFG.enabled),
@@ -1200,6 +1216,7 @@
         rowsVisible: vis.length,
         rowsWithChip: document.querySelectorAll('.__ls_chip').length,
         rowsNoName: dom.noName,
+        unverified: Array.from(state.convs.keys()).filter(k => !state.msgs.has(k)).length,
         idFromWrapper: dom.idFromWrapper,
         rowHasOwnId: !!(sample && selfConvId(sample)),
         sampleConvId: sample ? convIdOf(sample) : null,
@@ -1220,7 +1237,8 @@
       return rep;
     },
     help: function () {
-      LOG('Alt+O  = ẩn/hiện tất cả · ▭ = chỉ ẩn bảng · 🏷️/▤ = mở lại' +
+      LOG('Nhãn: QC = quảng cáo · BV = bài viết · LV = livestream · TN = tự nhắn · ? = chưa đọc tin nhắn (không đoán)' +
+        '\nAlt+O  = ẩn/hiện tất cả · ▭ = chỉ ẩn bảng · 🏷️/▤ = mở lại' +
         '\nChỉ xem tin nhắn của dòng đang hiển thị:  __leadSource.set({enrichVisible: false}) để tắt' +
         '\nMap tag id:  __leadSource.set({tagMap: {"83": {name:"Từ quảng cáo", source:"ads"}}})' +
         '\nMap tên tag trên dòng chat:  __leadSource.set({tagNameSource: {"QC": "ads", "LIVE": "live"}})' +
