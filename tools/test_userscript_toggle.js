@@ -70,6 +70,14 @@ window.Element.prototype.getBoundingClientRect = function () {
 };
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// đếm số request đi ra để chứng minh tắt là không gọi mạng nữa
+let _fetchN = 0;
+(function () {
+  const orig = window.fetch;
+  window.fetch = function () { _fetchN++; return orig.apply(this, arguments); };
+})();
+const fetchCount = () => _fetchN;
 const chips = () => doc.querySelectorAll('.__ls_chip').length;
 const cfg = () => window.__leadSource.cfg;
 
@@ -157,6 +165,15 @@ function setHidden(v) {
   if (items.length) items[0].dispatchEvent(new window.MouseEvent('click', { bubbles: true, composed: true }));
   await sleep(200);
   check(errors.length === hadError, 'nút 🔍 không ném lỗi' + (errors.length ? ': ' + errors[hadError] : ''));
+
+  // 8. tắt = DỪNG HẲN: không request, không vòng chạy
+  if (cfg().enabled) clickPanel('off');
+  const fetches = fetchCount();
+  await sleep(2500);
+  check(fetchCount() === fetches, 'đã tắt: không phát sinh request nào (' + fetches + ')');
+  check(window.__leadSource.debug().running === false, 'đã tắt: không còn vòng quét/poll');
+  check(chips() === 0, 'đã tắt: không còn nhãn nào');
+  check(!!doc.getElementById('__lead_source_fab'), 'đã tắt: vẫn còn nút 🏷️ để bật lại');
 
   check(errors.length === 0, 'không lỗi runtime' + (errors.length ? ': ' + errors[0] : ''));
   console.log('\n' + (fail ? '✗ FAIL (' + fail + ' lỗi)' : '✓ PASS — bật/tắt, tự phục hồi và chuyển tab đều đúng'));

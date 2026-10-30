@@ -86,7 +86,9 @@ __leadSource.debug()      // in + copy báo cáo chẩn đoán (gửi mình là 
 
 | Trong báo cáo | Nghĩa | Cách xử lý |
 |---|---|---|
-| `enabled: false` | bạn đã ẩn bằng Alt+O/✕ ở lần trước | bấm nút 🏷️ góc phải hoặc `__leadSource.show()` |
+| `enabled: false` | bạn đã **tắt hẳn** bằng Alt+O/✕ ở lần trước (script không chạy gì cả) | bấm nút 🏷️ góc phải hoặc `__leadSource.show()` |
+| `running: false` | đang tắt: không vòng quét, không poll, không gọi mạng | bật lại khi cần |
+| `decorateMs` | thời gian gắn nhãn 1 lượt (bình thường 1–5 ms) | nếu > 30 ms, gửi mình `debug()` |
 | `convs: 0` | chưa bắt được danh sách hội thoại | F5 lại trang Hội thoại; nếu vẫn 0, gửi mình `debug()` |
 | `domMode: "none"`, `rowsFound: 0` | DOM đổi cấu trúc, không tìm ra dòng | gửi mình `sampleRowHtml` trong báo cáo |
 | `rowsFound > 0`, `rowsWithChip: 0` | tìm ra dòng nhưng không gắn được nhãn | xem `verdict` + `sampleRowHtml` bên dưới |
@@ -239,3 +241,17 @@ Cách tìm tag id: mở Pancake → Hội thoại → bấm vào tag → xem URL
 - Không gọi API, không gửi dữ liệu đi đâu: chỉ đọc file HAR/JSON trên máy bạn.
 - Token/cookie không được dùng ở đây. Nếu bạn muốn tự động lấy dữ liệu qua API thay vì bắt HAR, nói mình
   viết thêm script gọi `POST /api/v1/conversations` + `GET /api/v1/conversations/<id>/messages`.
+
+### ⚡ Tắt là tắt hẳn + không làm chậm Pancake (3.4.0)
+
+| Nút | Việc xảy ra |
+|---|---|
+| **✕ / Alt+O** | tắt **toàn bộ**: dừng mọi timer, ngắt MutationObserver, huỷ enrich đang chờ, **không gọi mạng**, không xử lý dữ liệu mới. Nút 🏷️ vẫn còn để bật lại. |
+| **▭** | chỉ ẩn bảng, nhãn trên dòng chat vẫn chạy |
+
+Tối ưu tốc độ:
+- cache kết quả phân loại (Pancake render lại liên tục cũng không phải tính lại)
+- nhãn chỉ được ghi lại khi loại tin thật sự đổi
+- cache danh sách dòng, xoá khi Pancake render lại
+- nhịp quét dự phòng 3s (trước 1.5s), mỗi lượt enrich 3 hội thoại cách nhau 0.7s
+- đo thực tế trên DOM thật (31 dòng): **~2–3 ms/lượt gắn nhãn**

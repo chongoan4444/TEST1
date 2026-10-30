@@ -98,6 +98,13 @@ function run(fixtureName) {
 
       const offscreen = rows().filter(r => r.getBoundingClientRect().top >= VH);
       check(offscreen.every(r => !r.querySelector('.__ls_chip')), 'dòng ngoài khung nhìn không bị gắn (' + offscreen.length + ')');
+      // hiệu năng: mỗi lượt gắn nhãn phải rẻ (Pancake không được lag)
+      const t0 = Date.now();
+      for (let i = 0; i < 10; i++) window.__leadSource.refresh();
+      const per = (Date.now() - t0) / 10;
+      check(per < 60, 'mỗi lượt gắn nhãn < 60ms (đo được ' + per.toFixed(1) + 'ms/lượt)');
+      check((rep.decorateMs || 0) < 60, 'lượt decorate đầu: ' + rep.decorateMs + 'ms');
+
       check(errors.length === 0, 'không lỗi runtime' + (errors.length ? ': ' + errors[0] : ''));
 
       window.close();

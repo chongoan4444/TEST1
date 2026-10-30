@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.3.0
+// @version      3.4.0
 // @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn cho các hội thoại ĐANG HIỂN THỊ trên Pancake — chỉ khi có bằng chứng thật, không chấm điểm, chưa đọc tin nhắn thì hiện "?". Alt+O bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -24,9 +24,9 @@
     showChips: true,
     showLegend: true,
     pollMs: 25000,          // gọi lại danh sách hội thoại
-    scanMs: 1500,           // quét dự phòng các dòng ĐANG HIỂN THỊ
+    scanMs: 3000,           // quét dự phòng (observer + cuộn đã lo việc gắn nhãn)
     enrichVisible: true,    // chỉ xem tin nhắn của hội thoại đang hiển thị (để nhận ra quảng cáo)
-    enrichLimit: 4,         // tối đa N hội thoại mỗi lượt
+    enrichLimit: 3,         // tối đa N hội thoại mỗi lượt (càng ít càng nhẹ)
     enrichSpacing: 700,     // ms giữa 2 request
     enrichTTL: 600000,      // không hỏi lại hội thoại đã hỏi trong 10 phút
     topN: 12,
@@ -297,7 +297,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.3.0';
+  const VERSION = '3.4.0';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -330,6 +330,7 @@
 
   /** Đọc mọi response: nhận ra conversations hoặc messages bằng DẤU HIỆU DỮ LIỆU. */
   function maybeIngest(url, init, json) {
+    if (!CFG.enabled) return;                 // đã tắt giao diện = không xử lý gì nữa
     if (!json || typeof json !== 'object') return;
     if (Array.isArray(json.conversations) && json.conversations.length) ingestList(url, init, json);
 
@@ -473,7 +474,7 @@
   }
 
   function enrich(conv) {
-    if (!conv || !conv.id) return;
+    if (!conv || !conv.id || !CFG.enabled) return;      // tắt giao diện = không gọi mạng
     const id = conv.id;
     if (state.msgs.has(id) || state.enriching.has(id)) return;
     const last = state.enrichTried.get(id);
@@ -488,19 +489,28 @@
   }
 
   let enrichTimer = null;
+  const enrichTimers = [];
   function queueEnrich(convs) {
-    if (!CFG.enrichVisible || !convs.length) return;
+    if (!CFG.enabled || !CFG.enrichVisible || !convs.length) return;
     if (enrichTimer) return;
     const todo = convs.filter(c => c && c.id && !state.msgs.has(c.id) && !state.enriching.has(c.id)).slice(0, CFG.enrichLimit);
     if (!todo.length) return;
     enrichTimer = setTimeout(() => {
       enrichTimer = null;
-      todo.forEach((c, i) => setTimeout(() => enrich(c), i * CFG.enrichSpacing));
-    }, 250);
+      if (!CFG.enabled) return;
+      todo.forEach((c, i) => {
+        const t = setTimeout(() => {
+          const k = enrichTimers.indexOf(t);
+          if (k >= 0) enrichTimers.splice(k, 1);
+          enrich(c);
+        }, 300 + i * CFG.enrichSpacing);
+        enrichTimers.push(t);
+      });
+    }, 300);
   }
 
   function tick() {
-    if (document.hidden) return;
+    if (!CFG.enabled || document.hidden) return;      // tắt là dừng hẳn, không gọi mạng
     if (CFG.pollMs > 0) replayList();
   }
 
@@ -567,8 +577,18 @@
     return inner.length ? inner[0] : el;
   }
 
+  let rowsCache = null, rowsCacheAt = 0;
+  function dropRowsCache() { rowsCache = null; }
+
   /** Tìm dòng hội thoại: selector chuẩn → con của list → quét id toàn trang. */
   function findRows() {
+    if (rowsCache && Date.now() - rowsCacheAt < 1200) return rowsCache;
+    const out = findRowsNow();
+    rowsCache = out; rowsCacheAt = Date.now();
+    return out;
+  }
+
+  function findRowsNow() {
     let rows = safeQuery(selRow());
     if (rows.length) { dom.mode = 'selector'; return rows; }
 
@@ -730,6 +750,7 @@
 
   function decorate() {
     if (!CFG.enabled || !CFG.showChips || document.hidden) return;
+    const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
     const rows = visibleRows();
     dom.labeled = 0; dom.noName = 0; dom.idFromWrapper = false;
     if (!rows.length) { schedulePaint(); return; }
@@ -745,15 +766,18 @@
 
       const msgs = state.msgs.get(convId);
       const checked = state.msgs.has(convId);
-      const lead = buildLead(conv, msgs || [], now, checked);
-      const pending = !checked;                       // chưa đọc tin nhắn -> nhãn "?" chứ không đoán
-      if (pending && CFG.enrichVisible) needEnrich.push(conv);
+      const lead = cachedLead(conv, msgs, checked, now);
+      if (!checked && CFG.enrichVisible) needEnrich.push(conv);
 
       let chip = chips.get(convId);
-      if (chip && chip.parentElement && row.contains(chip)) { updateChip(chip, lead); dom.labeled++; return; }
+      if (chip && chip.parentElement && row.contains(chip)) {
+        if (chip.dataset.lsSig !== lead.sig) { updateChip(chip, lead); chip.dataset.lsSig = lead.sig; }
+        dom.labeled++;
+        return;
+      }
       if (chip) chips.delete(convId);
       chip = row.querySelector('.__ls_chip');
-      if (chip) { chips.set(convId, chip); updateChip(chip, lead); dom.labeled++; return; }
+      if (chip) { chips.set(convId, chip); updateChip(chip, lead); chip.dataset.lsSig = lead.sig; dom.labeled++; return; }
 
       // 3 đường gắn, luôn cố cho nhãn xuất hiện thay vì bỏ qua dòng
       const nameEl = nameNode(row);
@@ -770,11 +794,31 @@
         try { row.insertAdjacentElement('afterbegin', c); placed = true; } catch (e) {}
       }
       if (!placed) { dom.noName++; return; }
+      c.dataset.lsSig = lead.sig;
       chips.set(convId, c);
       dom.labeled++;
     });
 
     queueEnrich(needEnrich);
+    dom.ms = Math.round(((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0) * 10) / 10;
+  }
+
+  // Cache kết quả phân loại: Pancake re-render liên tục, không thể build lại từ đầu mỗi lần.
+  const leadCache = new Map();
+  let leadEpoch = -1;
+
+  function cachedLead(conv, msgs, checked, now) {
+    if (leadEpoch !== state.version) { leadCache.clear(); leadEpoch = state.version; }
+    const key = conv.id || '';
+    const unread = Number(conv.unread_count || 0) || 0;
+    const extra = unread + ':' + (checked ? (msgs ? msgs.length : 0) : -1) + ':' + (conv._fromDom ? 'd' : 'a');
+    const hit = leadCache.get(key);
+    if (hit && hit.extra === extra) return hit.lead;
+    const lead = buildLead(conv, msgs || [], now, checked);
+    lead.sig = lead.source + '|' + lead.confidence + '|' + lead.evidence.length + '|' + unread;
+    if (leadCache.size > 3000) leadCache.clear();
+    leadCache.set(key, { extra: extra, lead: lead });
+    return lead;
   }
 
   function scheduleDecor(force) {
@@ -954,7 +998,7 @@
 
     const now = Date.now();
     const all = [];
-    state.convs.forEach((c, id) => all.push(buildLead(c, state.msgs.get(id) || [], now, state.msgs.has(id))));
+    state.convs.forEach((c, id) => all.push(cachedLead(c, state.msgs.get(id), state.msgs.has(id), now)));
     all.sort(sortLeads);
 
     const sig = state.version + '|' + all.length + '|' + all.slice(0, CFG.topN).map(r => r.id + r.source + r.at).join(',');
@@ -978,7 +1022,7 @@
       '<button class="btn ' + (CFG.showLegend ? 'on' : '') + '" data-act="legend" title="Bảng kí hiệu">?</button>' +
       '<button class="btn" data-act="hidePanel" title="Ẩn bảng, giữ nhãn trên dòng chat">▭</button>' +
       '<button class="btn" data-act="collapse" title="Thu gọn">' + (wasCollapsed ? '▾' : '▴') + '</button>' +
-      '<button class="btn" data-act="off" title="Ẩn tất cả (Alt+O)">✕</button></div>' +
+      '<button class="btn" data-act="off" title="Tắt hẳn script (Alt+O)">✕</button></div>' +
       '<div class="counts">' +
       '<span class="cnt"><i style="background:' + SOURCE_COLOR.ads + '"></i>Quảng cáo <b>' + counts.ads + '</b></span>' +
       '<span class="cnt"><i style="background:' + SOURCE_COLOR.post + '"></i>Bài viết <b>' + counts.post + '</b></span>' +
@@ -1071,14 +1115,19 @@
     CFG.enabled = !!on;
     saveCfg({ enabled: CFG.enabled });
     if (!CFG.enabled) {
-      if (host) host.style.display = 'none';
+      stopLoops();            // dừng hẳn: không quét, không poll, không fetch, không observer
+      chips.clear();
       clearChips();
+      dom.labeled = 0; dom.rows = 0; dom.visible = 0;
+      if (host) host.style.display = 'none';
     } else {
       ensureHost();
       host.style.display = '';
       attachObserver();
+      startLoops();
       paint(true);
-      decorateNow();          // <- trước đây chỉ hẹn giờ, timer bị nuốt là mất nhãn luôn
+      decorateNow();
+      setTimeout(() => { if (CFG.enabled) tick(); }, 600);   // cập nhật lại danh sách ngay khi bật
     }
     syncFab();
     return CFG.enabled;
@@ -1091,7 +1140,7 @@
     e.preventDefault();
     e.stopPropagation();
     setEnabled(!CFG.enabled);
-    LOG(CFG.enabled ? 'đã bật' : 'đã ẩn (Alt+O để bật lại)');
+    LOG(CFG.enabled ? 'đã bật — bắt đầu chạy' : 'đã tắt hẳn — dừng quét, dừng gọi mạng (Alt+O để bật lại)');
   }
 
   document.addEventListener('keydown', onKeydown, true);
@@ -1131,7 +1180,7 @@
   function attachObserver() {
     const target = listContainer();
     if (mo && moTarget === target && document.contains(target)) return;
-    if (!mo) mo = new MutationObserver(() => scheduleDecor());
+    if (!mo) mo = new MutationObserver(() => { dropRowsCache(); scheduleDecor(); });
     if (moTarget) { try { mo.disconnect(); } catch (e) { /* ignore */ } }
     moTarget = target;
     mo.observe(target, { childList: true, subtree: true });
@@ -1139,37 +1188,60 @@
 
   let scrollTimer = null;
   function onScroll() {
+    if (!CFG.enabled) return;
     if (scrollTimer) return;
-    scrollTimer = setTimeout(() => { scrollTimer = null; scheduleDecor(true); }, 120);
+    scrollTimer = setTimeout(() => { scrollTimer = null; if (CFG.enabled) scheduleDecor(true); }, 120);
   }
   document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+
+  // ---- vòng chạy: BẬT thì mới chạy, TẮT là dừng sạch (không timer, không observer, không fetch)
+  const loops = { poll: null, scan: null, paint: null };
+
+  function scanTick() {
+    if (document.hidden) return;
+    syncFab();                              // giữ nút bật lại luôn tồn tại
+    if (!CFG.enabled) return;
+    attachObserver();
+    if (dom.rows && !dom.labeled) { chips.clear(); decorateNow(); }   // tự phục hồi
+    else scheduleDecor(true);
+  }
+
+  function startLoops() {
+    if (loops.poll) return;                 // đã chạy rồi
+    if (CFG.pollMs > 0) loops.poll = setInterval(tick, Math.max(8000, CFG.pollMs));
+    loops.scan = setInterval(scanTick, Math.max(800, CFG.scanMs));
+    loops.paint = setInterval(() => { if (CFG.enabled && CFG.showPanel) schedulePaint(); }, 3000);
+  }
+
+  function stopLoops() {
+    ['poll', 'scan', 'paint'].forEach(k => {
+      if (loops[k]) { clearInterval(loops[k]); loops[k] = null; }
+    });
+    if (enrichTimer) { clearTimeout(enrichTimer); enrichTimer = null; }
+    while (enrichTimers.length) clearTimeout(enrichTimers.pop());
+    if (decorTimer) { clearTimeout(decorTimer); decorTimer = null; }
+    if (paintTimer) { clearTimeout(paintTimer); paintTimer = null; }
+    if (scrollTimer) { clearTimeout(scrollTimer); scrollTimer = null; }
+    if (mo) { try { mo.disconnect(); } catch (e) { /* ignore */ } mo = null; moTarget = null; }
+    state.enriching.clear();
+  }
 
   function start() {
     attachObserver();
     scheduleDecor(true);
     paint(true);
     syncFab();
+    if (CFG.enabled) startLoops();
+    else syncFab();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
 
-  setTimeout(tick, 1200);
-  setInterval(tick, Math.max(8000, CFG.pollMs || 25000));
-  setInterval(() => {                     // quét dự phòng + gắn lại observer nếu Pancake render lại
-    if (document.hidden) return;
-    syncFab();                            // giữ nút bật lại luôn tồn tại
-    if (!CFG.enabled) return;
-    attachObserver();
-    if (dom.rows && !dom.labeled) { chips.clear(); decorateNow(); }   // tự phục hồi
-    else scheduleDecor(true);
-  }, Math.max(800, CFG.scanMs));
-
   // quay lại tab -> gắn lại ngay (trong lúc ẩn tab Pancake có thể đã render lại danh sách)
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && CFG.enabled) decorateNow();
+    if (!document.hidden && CFG.enabled) { attachObserver(); decorateNow(); }
   });
-  setInterval(() => { if (CFG.enabled && CFG.showPanel) schedulePaint(); }, 3000);
 
   // ======================================================================
   // 10. API console
@@ -1217,6 +1289,8 @@
         rowsWithChip: document.querySelectorAll('.__ls_chip').length,
         rowsNoName: dom.noName,
         unverified: Array.from(state.convs.keys()).filter(k => !state.msgs.has(k)).length,
+        running: !!(loops.scan || loops.poll),
+        decorateMs: dom.ms || 0,
         idFromWrapper: dom.idFromWrapper,
         rowHasOwnId: !!(sample && selfConvId(sample)),
         sampleConvId: sample ? convIdOf(sample) : null,
@@ -1238,7 +1312,7 @@
     },
     help: function () {
       LOG('Nhãn: QC = quảng cáo · BV = bài viết · LV = livestream · TN = tự nhắn · ? = chưa đọc tin nhắn (không đoán)' +
-        '\nAlt+O  = ẩn/hiện tất cả · ▭ = chỉ ẩn bảng · 🏷️/▤ = mở lại' +
+        '\nAlt+O  = BẬT/TẮT HẲN script · ▭ = chỉ ẩn bảng (vẫn chạy) · 🏷️/▤ = mở lại' +
         '\nChỉ xem tin nhắn của dòng đang hiển thị:  __leadSource.set({enrichVisible: false}) để tắt' +
         '\nMap tag id:  __leadSource.set({tagMap: {"83": {name:"Từ quảng cáo", source:"ads"}}})' +
         '\nMap tên tag trên dòng chat:  __leadSource.set({tagNameSource: {"QC": "ads", "LIVE": "live"}})' +
@@ -1247,7 +1321,7 @@
   };
 
   if (!CFG.enabled) {
-    LOG('đang ở trạng thái ĐÃ ẨN (lưu từ lần trước). Bấm nút 🏷️ góc phải hoặc Alt+O để bật lại.');
+    LOG('script ĐANG TẮT (lưu từ lần trước) — không quét, không gọi mạng. Bấm nút 🏷️ góc phải hoặc Alt+O để bật.');
   }
   LOG('v' + VERSION + ' đã bật · Alt+O ẩn/hiện · chỉ xử lý dòng đang hiển thị · __leadSource.debug() để chẩn đoán');
 })();

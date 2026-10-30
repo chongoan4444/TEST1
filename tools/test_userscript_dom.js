@@ -90,7 +90,7 @@ const pressAltO = () => doc.dispatchEvent(new window.KeyboardEvent('keydown',
   const earlyAdChip = chipOf(rows().find(r => rowName(r) === 'Trần Bảo'));
   const earlyAd = earlyAdChip ? earlyAdChip.textContent : null;
 
-  await sleep(2400);
+  await sleep(4200);
   const all = rows().length;
   const vis = visibleIdx();
   console.log(`Tổng số dòng: ${all} · đang hiển thị: ${vis.length} (index ${vis.join(',')})`);
@@ -135,11 +135,13 @@ const pressAltO = () => doc.dispatchEvent(new window.KeyboardEvent('keydown',
   check(hostDisplay() === 'none', 'Alt+O: ẩn bảng');
   check(fabDisplay() !== 'none', 'Alt+O: vẫn còn nút 🏷️ để bật lại');
 
-  // dữ liệu vẫn chạy khi đang ẩn
+  // TẮT = DỪNG HẲN: Pancake có tải thêm dữ liệu thì script cũng không xử lý
   const convsBefore = window.__leadSource.state.convs.size;
   doc.getElementById('refresh').click();
   await sleep(600);
-  check(window.__leadSource.state.convs.size >= convsBefore, 'Alt+O: dữ liệu vẫn được cập nhật khi giao diện tắt');
+  check(window.__leadSource.state.convs.size === convsBefore,
+    'Alt+O: tắt là dừng hẳn — không nạp thêm dữ liệu (' + convsBefore + ' → ' + window.__leadSource.state.convs.size + ')');
+  check(window.__leadSource.debug().running === false, 'Alt+O: không còn vòng quét/poll nào chạy');
 
   pressAltO();
   await sleep(800);
