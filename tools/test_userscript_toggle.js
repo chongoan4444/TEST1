@@ -166,6 +166,13 @@ function setHidden(v) {
   await sleep(200);
   check(errors.length === hadError, 'nút 🔍 không ném lỗi' + (errors.length ? ': ' + errors[hadError] : ''));
 
+  // 9. NÚT BẬT/TẮT NHÃN trên bảng (chỉ ẩn/hiện nhãn, script vẫn chạy)
+  check(chips() > 0, 'trước khi bấm nút Nhãn: đang có nhãn (' + chips() + ')');
+  check(clickPanel('chips'), 'bấm được nút 🏷️ Nhãn trên bảng');
+  check(chips() === 0, 'nút Nhãn TẮT: nhãn trên dòng chat biến mất');
+  check(window.__leadSource.debug().running === true, 'nút Nhãn TẮT: script vẫn chạy (chỉ ẩn nhãn)');
+  check(clickPanel('chips') && chips() > 0, 'nút Nhãn BẬT: nhãn hiện lại ngay (' + chips() + ')');
+
   // 8. tắt = DỪNG HẲN: không request, không vòng chạy
   if (cfg().enabled) clickPanel('off');
   const fetches = fetchCount();

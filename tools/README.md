@@ -255,3 +255,29 @@ Tối ưu tốc độ:
 - cache danh sách dòng, xoá khi Pancake render lại
 - nhịp quét dự phòng 3s (trước 1.5s), mỗi lượt enrich 3 hội thoại cách nhau 0.7s
 - đo thực tế trên DOM thật (31 dòng): **~2–3 ms/lượt gắn nhãn**
+
+### 🏷️ Nút bật/tắt nhãn (3.5.0)
+
+Trên bảng có nút **`🏷️ Nhãn BẬT` / `🚫 Nhãn TẮT`**:
+
+| Bấm | Kết quả |
+|---|---|
+| `🏷️ Nhãn BẬT` | hiện nhãn QC/BV/LV/TN/? trên từng dòng hội thoại |
+| `🚫 Nhãn TẮT` | **chỉ ẩn nhãn**, bảng và script vẫn chạy, bấm lại là hiện ngay |
+| `🔁 N` | đọc lại tin nhắn cho các dòng đang hiển thị (khi thấy nhiều `?`) |
+| `✕` / `Alt+O` | đóng bảng **và** nhãn, dừng mọi vòng quét/gọi mạng; script chỉ đọc thụ động dữ liệu Pancake tự tải |
+
+### Vì sao trước đây toàn ra "?" (đã sửa ở 3.5.0)
+
+Pancake trả **hồ sơ khách, không có `messages`** với hai kiểu URL:
+
+| URL | Trả về |
+|---|---|
+| `…/messages?customer_id=…` | ❌ hồ sơ khách |
+| `…/messages?` (rỗng) | ❌ hồ sơ khách |
+| `…/messages?customer_id=…&separate_pos=true` | ✅ có tin nhắn |
+| `…/messages?customer_id=…&user_view=true&is_new_api=true&separate_pos=true` | ✅ có tin nhắn |
+
+Bản cũ chỉ gọi **một** URL; nếu rơi vào ca ❌ thì không bao giờ có tin nhắn → dòng nào cũng `?`.
+Bản 3.5.0 thử **lần lượt** các biến thể trên và dùng biến thể trả về `messages`.
+Nếu vẫn `?`, xem `__leadSource.debug().enrichLast.keys` — nó cho biết Pancake trả khóa gì.

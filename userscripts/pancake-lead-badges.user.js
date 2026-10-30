@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.4.0
+// @version      3.5.0
 // @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn cho các hội thoại ĐANG HIỂN THỊ trên Pancake — chỉ khi có bằng chứng thật, không chấm điểm, chưa đọc tin nhắn thì hiện "?". Alt+O bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -297,7 +297,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.4.0';
+  const VERSION = '3.5.0';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -308,6 +308,7 @@
     firstSeen: new Map(),
     listReqs: [],          // [{url, init, at}] tối đa 3
     msgUrlTpl: null,
+    custIds: new Map(),      // conv_id -> customer_id (học từ URL Pancake tự gọi)
     lastSync: 0,
     version: 0,
     enriching: new Set(),
@@ -328,11 +329,43 @@
     return Date.now() - BOOT_AT < 30000;   // 30s đầu: đọc thử mọi API -> không bỏ lỡ endpoint mới
   }
 
+  const RE_CONV_SHAPE = /^\d{5,}_\d{5,}$/;
+
+  /** Một object có phải hội thoại không (dựa vào hình dạng, không dựa vào tên khóa). */
+  function looksLikeConv(x) {
+    return !!x && typeof x === 'object' && typeof x.id === 'string' && RE_CONV_SHAPE.test(x.id) &&
+      ('snippet' in x || 'customers' in x || 'updated_at' in x || 'message_count' in x || 'from_psid' in x);
+  }
+
+  /** Tìm mảng hội thoại ở bất kỳ đâu trong response (tối đa 3 tầng, tránh quét nặng). */
+  function findConvArray(node, depth) {
+    depth = depth || 0;
+    if (!node || typeof node !== 'object' || depth > 3) return null;
+    if (Array.isArray(node)) return (node.length && looksLikeConv(node[0])) ? node : null;
+    const prefer = ['conversations', 'data', 'list', 'items', 'results', 'payload', 'rows'];
+    for (let i = 0; i < prefer.length; i++) {
+      const v = node[prefer[i]];
+      if (v && typeof v === 'object') { const r = findConvArray(v, depth + 1); if (r) return r; }
+    }
+    const keys = Object.keys(node);
+    for (let i = 0; i < keys.length && i < 20; i++) {
+      const v = node[keys[i]];
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const r = findConvArray(v, depth + 1);
+        if (r) return r;
+      }
+    }
+    return null;
+  }
+
   /** Đọc mọi response: nhận ra conversations hoặc messages bằng DẤU HIỆU DỮ LIỆU. */
   function maybeIngest(url, init, json) {
-    if (!CFG.enabled) return;                 // đã tắt giao diện = không xử lý gì nữa
     if (!json || typeof json !== 'object') return;
     if (Array.isArray(json.conversations) && json.conversations.length) ingestList(url, init, json);
+    else {
+      const found = findConvArray(json);
+      if (found && found.length) { ingestList(url, init, { conversations: found }); }
+    }
 
     const list = json.messages || json.data;
     if (!Array.isArray(list)) return;
@@ -367,6 +400,15 @@
     list.forEach(c => {
       if (!c || !c.id) return;
       if (!state.firstSeen.has(c.id)) state.firstSeen.set(c.id, ts);
+      // Pancake lúc trả mảng, lúc trả map {uuid: khách} -> chuẩn hoá về mảng
+      if (c.customers && !Array.isArray(c.customers) && typeof c.customers === 'object') {
+        c.customers = Object.keys(c.customers).map(k => {
+          const v = c.customers[k];
+          return (v && typeof v === 'object') ? v : { id: k, name: String(v || '') };
+        });
+      }
+      const known = state.custIds && state.custIds.get(c.id);
+      if (known && (!c.customers || !c.customers.length)) c.customers = [{ id: known, name: '' }];
       state.convs.set(c.id, c);
     });
     // dọn bớt để không phình bộ nhớ
@@ -383,8 +425,15 @@
     schedulePaint();
   }
 
+  function learnCustId(id, url) {
+    if (!id || !url || !state.custIds) return;
+    const m = /[?&]customer_id=([0-9a-fA-F-]{30,})/.exec(url);
+    if (m) state.custIds.set(id, decodeURIComponent(m[1]));
+  }
+
   function ingestMessagesFor(id, list, url) {
     if (!id || !Array.isArray(list)) return;
+    learnCustId(id, url);
     // API trả rỗng nhưng hội thoại có tin -> coi như CHƯA đọc (không kết luận "tự nhắn" oan)
     const known = state.convs.get(id);
     if (!list.length && known && Number(known.message_count || 0) > 0) {
@@ -473,19 +522,62 @@
       '/messages' + q + 'user_view=true&is_new_api=true&separate_pos=true';
   }
 
-  function enrich(conv) {
-    if (!conv || !conv.id || !CFG.enabled) return;      // tắt giao diện = không gọi mạng
+  /**
+   * URL xem tin nhắn — thử lần lượt các biến thể ĐÃ THẤY TRẢ TIN NHẮN trong HAR thật:
+   *   ?customer_id=…&user_view=true&is_new_api=true&separate_pos=true   (có messages)
+   *   ?customer_id=…&separate_pos=true                                  (có messages)
+   * Còn ?customer_id=… (một mình) và ? rỗng thì Pancake trả hồ sơ khách, KHÔNG có messages.
+   */
+  function msgUrls(conv) {
+    const convId = conv.id || '';
+    const pageId = conv.page_id || convId.split('_')[0] || '';
+    const cust = (conv.customers && conv.customers[0]) || {};
+    const custId = cust.id || (state.custIds && state.custIds.get(convId)) || '';
+    const base = '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations/' + encodeURIComponent(convId) + '/messages';
+    const out = [];
+    if (state.msgUrlTpl) {
+      out.push(state.msgUrlTpl.replace(/\/conversations\/[^/?#]+\/messages/, '/conversations/' + encodeURIComponent(convId) + '/messages')
+        .replace(/customer_id=[^&]*/, 'customer_id=' + encodeURIComponent(custId)));
+    }
+    if (custId) {
+      const q = 'customer_id=' + encodeURIComponent(custId);
+      out.push(base + '?' + q + '&user_view=true&is_new_api=true&separate_pos=true');
+      out.push(base + '?' + q + '&separate_pos=true');
+      out.push(base + '?' + q);
+    }
+    return out.filter((u, i, a) => a.indexOf(u) === i);
+  }
+
+  async function enrich(conv) {
+    if (!conv || !conv.id || !CFG.enabled) return;
     const id = conv.id;
     if (state.msgs.has(id) || state.enriching.has(id)) return;
     const last = state.enrichTried.get(id);
     if (last && Date.now() - last < CFG.enrichTTL) return;
     state.enriching.add(id);
     state.enrichTried.set(id, Date.now());
-    const url = messagesUrl(conv);
-    fetch(url, { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => ingestMessages(url, j))
-      .catch(err => { state.enriching.delete(id); noteError('enrich: ' + err.message); });
+
+    const urls = msgUrls(conv);
+    let lastKeys = null;
+    for (let i = 0; i < urls.length; i++) {
+      if (!CFG.enabled) break;
+      try {
+        const res = await fetch(urls[i], { credentials: 'include' });
+        const j = await res.json();
+        const arr = (j && Array.isArray(j.messages)) ? j.messages : null;
+        state.enrichDbg = { id: id, got: arr ? arr.length : 0, keys: Object.keys(j || {}).slice(0, 8), url: urls[i].slice(-70) };
+        if (arr) { ingestMessagesFor(id, arr, urls[i]); return; }
+        lastKeys = Object.keys(j || {}).slice(0, 6).join(',');
+      } catch (e) {
+        state.enrichDbg = { id: id, got: 0, keys: ['lỗi: ' + e.message], url: urls[i].slice(-70) };
+        lastKeys = 'lỗi: ' + e.message;
+      }
+    }
+    state.enriching.delete(id);
+    state.enrichTried.set(id, Date.now() - CFG.enrichTTL + 60000);   // thử lại sau 60s
+    state.enrichFail = (state.enrichFail || 0) + 1;
+    if (!urls.length) noteError('không có customer_id để xem tin nhắn của ' + id);
+    else if (lastKeys) noteError('tin nhắn ' + id + ': Pancake trả [' + lastKeys + '] — không có messages');
   }
 
   let enrichTimer = null;
@@ -526,7 +618,7 @@
     row: '.conversation-list-item',
     name: '.name-text, .name-module-text, [class*="name-text"], [class*="conversation-name"]',
     snippet: '.snippet-text, [class*="snippet-text"]',
-    tag: '.conversation_tags_item, [class*="tags_item"]',
+    tag: '.list-tags, [class*="list_tags"], .tag-wrap, .conversation_tags_item, [class*="tags_item"]',
   };
 
   function selList() { return CFG.selList || SEL_DEFAULTS.list; }
@@ -874,6 +966,8 @@
     .list { overflow-y: auto; padding: 5px; }
     .item { display: flex; gap: 7px; padding: 7px; border-radius: 9px; cursor: pointer; align-items: flex-start; }
     .item:hover { background: #f7f8fd; }
+    .btn.toggle { font-weight: 700; padding: 0 7px; }
+    .btn.toggle.on { background: #7c3aed; color: #fff; border-color: #7c3aed; }
     .kind { min-width: 30px; text-align: center; font-weight: 800; font-size: 12px; line-height: 1.2;
              letter-spacing: .3px; padding-top: 1px; }
     .mid { flex: 1; min-width: 0; }
@@ -1018,6 +1112,10 @@
     wrap.innerHTML =
       '<div class="hd"><span class="dot"></span><span class="t">Tệp khách</span>' +
       '<span class="cnt" style="padding:1px 6px"><b>' + all.length + '</b></span><span class="grow"></span>' +
+      '<button class="btn toggle ' + (CFG.showChips ? 'on' : '') + '" data-act="chips" title="Bật/tắt nhãn trên dòng chat">' +
+        (CFG.showChips ? '🏷️ Nhãn BẬT' : '🚫 Nhãn TẮT') + '</button>' +
+      '<button class="btn ' + (unverified ? '' : 'on') + '" data-act="retry" title="Đọc lại tin nhắn cho các dòng đang hiển thị">🔁' +
+        (unverified ? ' ' + unverified : '') + '</button>' +
       '<span class="kbd">Alt+O</span>' +
       '<button class="btn ' + (CFG.showLegend ? 'on' : '') + '" data-act="legend" title="Bảng kí hiệu">?</button>' +
       '<button class="btn" data-act="hidePanel" title="Ẩn bảng, giữ nhãn trên dòng chat">▭</button>' +
@@ -1079,7 +1177,37 @@
       paint(true);
       return;
     }
-    if (act === 'off') { setEnabled(false); return; }
+    if (act === 'chips') {
+      // CHỈ bật/tắt nhãn trên dòng chat — script vẫn chạy bình thường
+      CFG.showChips = !CFG.showChips;
+      saveCfg({ showChips: CFG.showChips });
+      if (CFG.showChips) decorateNow();
+      else { chips.clear(); clearChips(); }
+      paint(true);
+      LOG(CFG.showChips ? 'đã bật nhãn trên dòng chat' : 'đã tắt nhãn trên dòng chat (script vẫn cập nhật ngầm)');
+      return;
+    }
+    if (act === 'retry') {
+      state.enrichTried.clear();
+      state.enrichFail = 0;
+      state.msgs.clear();
+      decorateNow();
+      paint(true);
+      LOG('đang đọc lại tin nhắn cho các dòng đang hiển thị…');
+      return;
+    }
+    if (act === 'off') {
+      // đóng cả bảng + nhãn, nhưng KHÔNG giết script: dữ liệu vẫn được đọc thụ động
+      stopLoops();
+      CFG.enabled = false;
+      saveCfg({ enabled: false });
+      chips.clear();
+      clearChips();
+      dom.labeled = 0;
+      if (host) host.style.display = 'none';
+      syncFab();
+      return;
+    }
     if (!id) return;
     const conv = state.convs.get(id) || { id: id };
     if (act === 'copy') {
@@ -1291,6 +1419,8 @@
         unverified: Array.from(state.convs.keys()).filter(k => !state.msgs.has(k)).length,
         running: !!(loops.scan || loops.poll),
         decorateMs: dom.ms || 0,
+        enrichFail: state.enrichFail || 0,
+        enrichLast: state.enrichDbg || null,
         idFromWrapper: dom.idFromWrapper,
         rowHasOwnId: !!(sample && selfConvId(sample)),
         sampleConvId: sample ? convIdOf(sample) : null,
