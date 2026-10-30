@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.5.0
+// @version      3.6.0
 // @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn cho các hội thoại ĐANG HIỂN THỊ trên Pancake — chỉ khi có bằng chứng thật, không chấm điểm, chưa đọc tin nhắn thì hiện "?". Alt+O bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -297,7 +297,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.5.0';
+  const VERSION = '3.6.0';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -1116,11 +1116,11 @@
         (CFG.showChips ? '🏷️ Nhãn BẬT' : '🚫 Nhãn TẮT') + '</button>' +
       '<button class="btn ' + (unverified ? '' : 'on') + '" data-act="retry" title="Đọc lại tin nhắn cho các dòng đang hiển thị">🔁' +
         (unverified ? ' ' + unverified : '') + '</button>' +
-      '<span class="kbd">Alt+O</span>' +
+      '<span class="kbd">Alt+O = đóng bảng</span>' +
       '<button class="btn ' + (CFG.showLegend ? 'on' : '') + '" data-act="legend" title="Bảng kí hiệu">?</button>' +
-      '<button class="btn" data-act="hidePanel" title="Ẩn bảng, giữ nhãn trên dòng chat">▭</button>' +
+      '<button class="btn" data-act="hidePanel" title="Ẩn bảng — nhãn trên dòng chat vẫn hiện">▭</button>' +
       '<button class="btn" data-act="collapse" title="Thu gọn">' + (wasCollapsed ? '▾' : '▴') + '</button>' +
-      '<button class="btn" data-act="off" title="Tắt hẳn script (Alt+O)">✕</button></div>' +
+      '<button class="btn" data-act="off" title="Đóng bảng — nhãn vẫn hiện (Alt+O)">✕</button></div>' +
       '<div class="counts">' +
       '<span class="cnt"><i style="background:' + SOURCE_COLOR.ads + '"></i>Quảng cáo <b>' + counts.ads + '</b></span>' +
       '<span class="cnt"><i style="background:' + SOURCE_COLOR.post + '"></i>Bài viết <b>' + counts.post + '</b></span>' +
@@ -1171,12 +1171,7 @@
       paint(true);
       return;
     }
-    if (act === 'hidePanel') {
-      CFG.showPanel = false;
-      saveCfg({ showPanel: false });
-      paint(true);
-      return;
-    }
+    if (act === 'hidePanel') { setPanel(false); return; }
     if (act === 'chips') {
       // CHỈ bật/tắt nhãn trên dòng chat — script vẫn chạy bình thường
       CFG.showChips = !CFG.showChips;
@@ -1197,15 +1192,9 @@
       return;
     }
     if (act === 'off') {
-      // đóng cả bảng + nhãn, nhưng KHÔNG giết script: dữ liệu vẫn được đọc thụ động
-      stopLoops();
-      CFG.enabled = false;
-      saveCfg({ enabled: false });
-      chips.clear();
-      clearChips();
-      dom.labeled = 0;
-      if (host) host.style.display = 'none';
-      syncFab();
+      // đóng BẢNG. Nhãn trên dòng chat vẫn hiện (chỉ nút 🏷️ Nhãn mới tắt nhãn)
+      setPanel(false);
+      LOG('đã đóng bảng — nhãn vẫn hiện. Muốn tắt nhãn: bấm 🏷️ Nhãn (trong bảng) hoặc __leadSource.set({showChips:false})');
       return;
     }
     if (!id) return;
@@ -1239,6 +1228,21 @@
   //    ▭             : chỉ ẩn panel, nhãn trên dòng chat vẫn cập nhật.
   //    Dữ liệu + enrich LUÔN chạy, kể cả khi đã ẩn -> bật lại là có ngay.
   // ======================================================================
+  /** Ẩn/hiện BẢNG — không liên quan tới nhãn trên dòng chat. */
+  function setPanel(show) {
+    CFG.showPanel = !!show;
+    saveCfg({ showPanel: CFG.showPanel });
+    if (!CFG.showPanel) {
+      if (host) host.style.display = 'none';
+    } else if (CFG.enabled) {
+      ensureHost();
+      host.style.display = '';
+      paint(true);
+    }
+    syncFab();
+    return CFG.showPanel;
+  }
+
   function setEnabled(on) {
     CFG.enabled = !!on;
     saveCfg({ enabled: CFG.enabled });
@@ -1267,8 +1271,9 @@
     if (k !== 'o' && e.code !== 'KeyO') return;
     e.preventDefault();
     e.stopPropagation();
-    setEnabled(!CFG.enabled);
-    LOG(CFG.enabled ? 'đã bật — bắt đầu chạy' : 'đã tắt hẳn — dừng quét, dừng gọi mạng (Alt+O để bật lại)');
+    if (!CFG.enabled) { setEnabled(true); return; }
+    setPanel(!CFG.showPanel);
+    LOG(CFG.showPanel ? 'đã mở bảng (nhãn vẫn hiện)' : 'đã đóng bảng — nhãn vẫn hiện, dùng nút 🏷️ Nhãn để tắt nhãn');
   }
 
   document.addEventListener('keydown', onKeydown, true);
@@ -1328,7 +1333,7 @@
   function scanTick() {
     if (document.hidden) return;
     syncFab();                              // giữ nút bật lại luôn tồn tại
-    if (!CFG.enabled) return;
+    if (!CFG.enabled || !CFG.showChips) return;
     attachObserver();
     if (dom.rows && !dom.labeled) { chips.clear(); decorateNow(); }   // tự phục hồi
     else scheduleDecor(true);
@@ -1442,7 +1447,9 @@
     },
     help: function () {
       LOG('Nhãn: QC = quảng cáo · BV = bài viết · LV = livestream · TN = tự nhắn · ? = chưa đọc tin nhắn (không đoán)' +
-        '\nAlt+O  = BẬT/TẮT HẲN script · ▭ = chỉ ẩn bảng (vẫn chạy) · 🏷️/▤ = mở lại' +
+        '\n🏷️ Nhãn BẬT/TẮT = nút duy nhất tắt nhãn trên dòng chat' +
+        '\nAlt+O / ✕ / ▭ = đóng bảng — NHÃN VẪN HIỆN' +
+        '\nMuốn dừng hẳn script: __leadSource.set({enabled:false})' +
         '\nChỉ xem tin nhắn của dòng đang hiển thị:  __leadSource.set({enrichVisible: false}) để tắt' +
         '\nMap tag id:  __leadSource.set({tagMap: {"83": {name:"Từ quảng cáo", source:"ads"}}})' +
         '\nMap tên tag trên dòng chat:  __leadSource.set({tagNameSource: {"QC": "ads", "LIVE": "live"}})' +

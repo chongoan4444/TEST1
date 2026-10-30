@@ -281,3 +281,14 @@ Pancake trả **hồ sơ khách, không có `messages`** với hai kiểu URL:
 Bản cũ chỉ gọi **một** URL; nếu rơi vào ca ❌ thì không bao giờ có tin nhắn → dòng nào cũng `?`.
 Bản 3.5.0 thử **lần lượt** các biến thể trên và dùng biến thể trả về `messages`.
 Nếu vẫn `?`, xem `__leadSource.debug().enrichLast.keys` — nó cho biết Pancake trả khóa gì.
+
+### 🏷️ Nhãn và bảng là hai thứ riêng (3.6.0)
+
+| Thao tác | Bảng | Nhãn trên dòng chat |
+|---|---|---|
+| `▭` / `✕` / `Alt+O` | đóng | **vẫn hiện, vẫn cập nhật** |
+| Bấm nút nổi `▤` | mở lại | vẫn hiện |
+| `🏷️ Nhãn BẬT/TẮT` | không đổi | **nút duy nhất tắt/bật nhãn** |
+| `__leadSource.set({enabled:false})` | đóng | tắt, dừng hẳn script |
+
+Nói ngắn: đóng bảng không bao giờ làm mất nhãn. Chỉ nút 🏷️ Nhãn mới tắt nhãn.

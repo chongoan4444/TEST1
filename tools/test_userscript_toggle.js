@@ -117,16 +117,18 @@ function setHidden(v) {
   const base = chips();
   check(base > 0, 'ban đầu có nhãn (' + base + ')');
 
-  // 1. ✕ ẩn tất cả
+  // 1. ✕ đóng BẢNG — nhãn vẫn phải hiện
   check(clickPanel('off'), 'bấm được nút ✕');
-  check(chips() === 0 && cfg().enabled === false, '✕ ẩn hết nhãn');
+  check(cfg().showPanel === false, '✕ đóng bảng');
+  check(chips() > 0, '✕: NHÃN VẪN HIỆN (' + chips() + ')');
+  check(window.__leadSource.debug().running === true, '✕: script vẫn chạy');
   const fab = doc.getElementById('__lead_source_fab');
-  check(!!fab && fab.style.display !== 'none', 'nút 🏷️ vẫn còn để bật lại');
+  check(!!fab && fab.style.display !== 'none', '✕: có nút nổi để mở lại bảng');
 
-  // 2. bật lại -> nhãn phải có NGAY (không chờ timer)
+  // 2. mở lại bảng bằng nút nổi
   clickFab();
-  check(cfg().enabled === true, 'bấm 🏷️ bật lại được');
-  check(chips() > 0, 'NHÃN HIỆN LẠI NGAY sau khi bật (không cần chờ/F5) — ' + chips() + ' nhãn');
+  check(cfg().showPanel === true, 'bấm nút nổi: mở lại bảng');
+  check(chips() > 0, 'mở lại bảng: nhãn vẫn còn (' + chips() + ')');
 
   // 3. ▭ chỉ ẩn bảng, nhãn còn
   const before = chips();
@@ -136,13 +138,13 @@ function setHidden(v) {
   await sleep(200);
   check(cfg().showPanel !== false, 'mở lại bảng được');
 
-  // 4. Alt+O nhiều lần
+  // 4. Alt+O chỉ đóng/mở bảng — nhãn không đổi
   for (let i = 1; i <= 3; i++) {
     altO();
-    const offOk = chips() === 0 && cfg().enabled === false;
+    const closed = cfg().showPanel === false && chips() > 0;
     altO();
-    const onOk = chips() > 0 && cfg().enabled === true;
-    check(offOk && onOk, 'Alt+O lần ' + i + ': tắt hết → bật lại có nhãn ngay (' + chips() + ')');
+    const opened = cfg().showPanel === true && chips() > 0;
+    check(closed && opened, 'Alt+O lần ' + i + ': chỉ đóng/mở bảng, nhãn vẫn hiện (' + chips() + ')');
   }
 
   // 5. React xoá sạch nhãn -> watchdog tự gắn lại
@@ -173,14 +175,17 @@ function setHidden(v) {
   check(window.__leadSource.debug().running === true, 'nút Nhãn TẮT: script vẫn chạy (chỉ ẩn nhãn)');
   check(clickPanel('chips') && chips() > 0, 'nút Nhãn BẬT: nhãn hiện lại ngay (' + chips() + ')');
 
-  // 8. tắt = DỪNG HẲN: không request, không vòng chạy
-  if (cfg().enabled) clickPanel('off');
+  // 8. TẮT HẲN bằng API (không phải nút trên giao diện)
+  window.__leadSource.set({ enabled: false });
+  await sleep(200);
   const fetches = fetchCount();
-  await sleep(2500);
-  check(fetchCount() === fetches, 'đã tắt: không phát sinh request nào (' + fetches + ')');
-  check(window.__leadSource.debug().running === false, 'đã tắt: không còn vòng quét/poll');
-  check(chips() === 0, 'đã tắt: không còn nhãn nào');
-  check(!!doc.getElementById('__lead_source_fab'), 'đã tắt: vẫn còn nút 🏷️ để bật lại');
+  await sleep(2000);
+  check(fetchCount() === fetches, 'API tắt: không phát sinh request nào (' + fetches + ')');
+  check(window.__leadSource.debug().running === false, 'API tắt: không còn vòng quét/poll');
+  check(chips() === 0, 'API tắt: không còn nhãn nào');
+  window.__leadSource.set({ enabled: true, showPanel: true });
+  await sleep(600);
+  check(chips() > 0, 'API bật lại: nhãn có lại ngay (' + chips() + ')');
 
   check(errors.length === 0, 'không lỗi runtime' + (errors.length ? ': ' + errors[0] : ''));
   console.log('\n' + (fail ? '✗ FAIL (' + fail + ' lỗi)' : '✓ PASS — bật/tắt, tự phục hồi và chuyển tab đều đúng'));

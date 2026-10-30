@@ -128,24 +128,41 @@ const pressAltO = () => doc.dispatchEvent(new window.KeyboardEvent('keydown',
   await sleep(400);
   check(hostDisplay() !== 'none', 'bấm nút nổi: bảng hiện lại');
 
-  // --- 4b. Alt+O ẩn tất cả
+  // --- 4b. Alt+O đóng bảng — NHÃN VẪN HIỆN
   pressAltO();
-  await sleep(400);
-  check(labeled() === 0, 'Alt+O: xoá hết nhãn');
-  check(hostDisplay() === 'none', 'Alt+O: ẩn bảng');
-  check(fabDisplay() !== 'none', 'Alt+O: vẫn còn nút 🏷️ để bật lại');
+  await sleep(500);
+  check(hostDisplay() === 'none', 'Alt+O: bảng đã đóng');
+  check(labeled() > 0, 'Alt+O: NHÃN VẪN HIỆN dù bảng đóng (' + labeled() + ')');
+  check(fabDisplay() !== 'none', 'Alt+O: có nút nổi để mở lại bảng');
+  check(window.__leadSource.debug().running === true, 'Alt+O: script vẫn chạy khi bảng đóng');
 
-  // TẮT = DỪNG HẲN: Pancake có tải thêm dữ liệu thì script cũng không xử lý
-  const convsBefore = window.__leadSource.state.convs.size;
-  doc.getElementById('refresh').click();
+  pressAltO();
   await sleep(600);
-  check(window.__leadSource.state.convs.size === convsBefore,
-    'Alt+O: tắt là dừng hẳn — không nạp thêm dữ liệu (' + convsBefore + ' → ' + window.__leadSource.state.convs.size + ')');
-  check(window.__leadSource.debug().running === false, 'Alt+O: không còn vòng quét/poll nào chạy');
+  check(hostDisplay() !== 'none', 'Alt+O lần 2: bảng mở lại');
+  check(labeled() > 0, 'Alt+O lần 2: nhãn vẫn còn (' + labeled() + ')');
 
-  pressAltO();
-  await sleep(800);
-  check(labeled() >= vis2.length, 'Alt+O lần 2: nhãn xuất hiện lại ngay (' + labeled() + ')');
+  // --- 4c. chỉ nút 🏷️ Nhãn mới tắt được nhãn
+  const chipBtn = panelBtn('[data-act="chips"]');
+  check(!!chipBtn, 'có nút 🏷️ Nhãn trên bảng');
+  if (chipBtn) chipBtn.click();
+  await sleep(600);
+  check(labeled() === 0, 'nút Nhãn TẮT: nhãn biến mất');
+  check(hostDisplay() !== 'none', 'nút Nhãn TẮT: bảng vẫn mở');
+  check(window.__leadSource.debug().running === true, 'nút Nhãn TẮT: script vẫn chạy');
+  const chipBtn2 = panelBtn('[data-act="chips"]');
+  if (chipBtn2) chipBtn2.click();
+  await sleep(700);
+  check(labeled() > 0, 'nút Nhãn BẬT: nhãn hiện lại ngay (' + labeled() + ')');
+
+  // --- 4d. tắt hẳn bằng API (không phải nút trên giao diện)
+  window.__leadSource.set({ enabled: false });
+  await sleep(400);
+  check(labeled() === 0, 'API set({enabled:false}): nhãn biến mất');
+  check(window.__leadSource.debug().running === false, 'API set({enabled:false}): dừng vòng chạy');
+  window.__leadSource.set({ enabled: true, showPanel: true });
+  await sleep(900);
+  check(labeled() > 0, 'bật lại bằng API: nhãn có lại (' + labeled() + ')');
+  check(hostDisplay() !== 'none', 'bật lại bằng API: bảng mở lại');
 
   // --- 5. khách mới load vào
   const before2 = labeled();
