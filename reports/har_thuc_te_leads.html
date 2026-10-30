@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phân loại tệp khách theo nguồn</title>
+<style>
+  :root{
+    --bg:#f6f7fb; --card:#fff; --line:#e6e9f0; --ink:#111827; --muted:#6b7280;
+    --ads:#7c3aed; --post:#0ea5e9; --live:#e11d48; --organic:#059669; --unknown:#9ca3af;
+    --hot:#dc2626; --warm:#d97706; --cold:#6b7280;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif}
+  header{padding:24px 24px 0;max-width:1400px}
+  h1{margin:0 0 4px;font-size:20px;letter-spacing:-.2px}
+  .sub{color:var(--muted);font-size:13px}
+  .banner{margin:16px 24px 0;padding:10px 14px;border-radius:10px;background:#fff7ed;
+          border:1px solid #fed7aa;color:#9a3412;font-size:13px;max-width:1350px}
+  .wrap{padding:18px 24px 34px;max-width:1400px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .card .k{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .card .v{font-size:23px;font-weight:650;margin-top:2px;line-height:1.2}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;
+        cursor:pointer;font-size:13px;display:inline-flex;gap:6px;align-items:center;user-select:none}
+  .chip:hover{border-color:#c7cbd6}
+  .chip.active{background:#111827;color:#fff;border-color:#111827}
+  .chip .n{opacity:.6;font-size:12px}
+  input[type=search]{flex:1;min-width:190px;border:1px solid var(--line);border-radius:10px;
+        padding:9px 12px;font-size:14px;background:#fff;outline:none}
+  input[type=search]:focus{border-color:#a5b4fc;box-shadow:0 0 0 3px #eef2ff}
+  table{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);
+        border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+     background:#fafbfd;cursor:pointer;white-space:nowrap}
+  th:hover{color:var(--ink)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#fafbff}
+  .badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;
+         font-size:12px;font-weight:600;color:#fff;white-space:nowrap}
+  .b-ads{background:var(--ads)} .b-post{background:var(--post)} .b-live{background:var(--live)}
+  .b-organic{background:var(--organic)} .b-unknown{background:var(--unknown)}
+  .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.85)}
+  .score{font-weight:700;font-size:17px;line-height:1.2}
+  .p-hot{color:var(--hot)} .p-warm{color:var(--warm)} .p-cold{color:var(--cold)}
+  .prio{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+  .name{font-weight:600}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--muted)}
+  .snip{color:#374151;font-size:13px;max-width:330px}
+  .conf{font-size:11.5px;color:var(--muted);display:block;margin-top:3px}
+  .conf.high{color:#b91c1c} .conf.mid{color:#b45309}
+  details summary{cursor:pointer;color:#2563eb;font-size:12.5px;list-style:none;white-space:nowrap}
+  details summary::-webkit-details-marker{display:none}
+  details summary:hover{text-decoration:underline}
+  details ul{margin:6px 0 0;padding-left:16px;color:#374151;font-size:12.5px}
+  details li{margin:2px 0}
+  .empty{padding:44px;text-align:center;color:var(--muted)}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0 0;font-size:12.5px;color:var(--muted)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px}
+  footer{padding:0 24px 34px;color:var(--muted);font-size:12px;max-width:1400px}
+  @media(max-width:900px){.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Phân loại tệp khách theo nguồn</h1>
+  <div class="sub">1 tệp khách · quảng cáo 0 · bài viết 0 · livestream 0 · tự nhắn 1 · chốt ngay 0 · nguồn: tinnhanmoi.har</div>
+</header>
+
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+  <div class="toolbar">
+    <div class="chip active" data-f="all">Tất cả <span class="n" id="n-all"></span></div>
+    <div class="chip" data-f="ads">Quảng cáo <span class="n" id="n-ads"></span></div>
+    <div class="chip" data-f="post">Bài viết <span class="n" id="n-post"></span></div>
+    <div class="chip" data-f="live">Livestream <span class="n" id="n-live"></span></div>
+    <div class="chip" data-f="organic">Tự nhắn <span class="n" id="n-organic"></span></div>
+    <div class="chip" data-f="hot">Chốt ngay <span class="n" id="n-hot"></span></div>
+    <input type="search" id="q" placeholder="Tìm theo tên, PSID, SĐT, nội dung tin…">
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th data-sort="score">Ưu tiên</th>
+        <th data-sort="source">Nguồn</th>
+        <th data-sort="name">Khách</th>
+        <th class="hide-sm" data-sort="page_name">Page</th>
+        <th class="hide-sm" data-sort="updated_at">Cập nhật</th>
+        <th class="hide-sm">Tin cuối</th>
+        <th data-sort="unread">Chưa đọc</th>
+        <th>Bằng chứng</th>
+      </tr>
+    </thead>
+    <tbody id="tb"></tbody>
+  </table>
+  <div class="legend">
+    <span><i style="background:var(--ads)"></i>Quảng cáo — có ad_id / referral / campaign</span>
+    <span><i style="background:var(--post)"></i>Bài viết — có post_id hoặc type = comment</span>
+    <span><i style="background:var(--live)"></i>Livestream — có live_video / has_livestream_order</span>
+    <span><i style="background:var(--organic)"></i>Tự nhắn — INBOX không có dấu hiệu nào</span>
+  </div>
+</div>
+<footer>
+  Điểm ưu tiên = chưa đọc + mới tương tác + có SĐT + số tin + ý định mua + nguồn (quảng cáo được cộng nhiều hơn).
+  Độ tin cậy: <b>cao</b> = có mã/định danh rõ ràng, <b>trung bình</b> = chỉ dựa vào tag hoặc type, <b>thấp</b> = suy đoán.
+</footer>
+<script id="data" type="application/json">[{"id": "881264518397934_28856202704022307", "name": "Lê Hằng", "psid": "28856202704022307", "phone": "", "page_id": "881264518397934", "page_name": "Khánh Ly Store", "source": "organic", "source_label": "Tự nhắn", "confidence_key": "low", "confidence": "thấp", "evidence": ["tags chưa map tên: #4, #83, #172", "type = INBOX, không có dấu hiệu ads / post / live"], "tags": [4, 83, 172], "snippet": "Áo shop SALE 30% còn (1 áo 169k,  2 áo 269k, 3 áo 369k)❤️\r\n\r\n🍀Mà...", "message_count": 5, "unread": 0, "has_phone": false, "updated_at": "2026-10-30T04:07:08.173000+00:00", "updated_disp": "30/10/2026 11:07", "last_customer_at": "2026-10-30T04:06:34+00:00", "score": 50, "prio_key": "warm", "prio": "Ưu tiên", "reasons": ["tương tác < 24h +20", "5 tin nhắn +10", "ý định mua: sale +20"], "messages_loaded": 0}]</script>
+<script>
+const rows = JSON.parse(document.getElementById('data').textContent);
+const tb = document.getElementById('tb');
+let filter = 'all', query = '', sortKey = 'score', sortDir = -1;
+
+const count = fn => rows.filter(fn).length;
+document.getElementById('n-all').textContent = rows.length;
+['ads','post','live','organic'].forEach(s => {
+  const el = document.getElementById('n-' + s);
+  if (el) el.textContent = count(r => r.source === s);
+});
+document.getElementById('n-hot').textContent = count(r => r.prio_key === 'hot');
+
+const STATS = [
+  ['Tổng tệp khách', rows.length],
+  ['Từ quảng cáo', count(r => r.source === 'ads')],
+  ['Từ bài viết', count(r => r.source === 'post')],
+  ['Chốt ngay', count(r => r.prio_key === 'hot')],
+  ['Chưa đọc', count(r => r.unread > 0)],
+];
+document.getElementById('cards').innerHTML = STATS.map(([k, v]) =>
+  `<div class="card"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function passes(r){
+  if (filter === 'hot' && r.prio_key !== 'hot') return false;
+  if (filter !== 'all' && filter !== 'hot' && r.source !== filter) return false;
+  if (!query) return true;
+  const hay = [r.name, r.psid, r.phone, r.snippet, r.page_name, r.source_label,
+               (r.tags||[]).join(' '), (r.evidence||[]).join(' ')].join(' ').toLowerCase();
+  return hay.includes(query);
+}
+
+function render(){
+  const list = rows.filter(passes).sort((a, b) => {
+    let x = a[sortKey], y = b[sortKey];
+    if (typeof x === 'string') return String(x).localeCompare(String(y)) * sortDir;
+    return (x - y) * sortDir;
+  });
+  if (!list.length){ tb.innerHTML = '<tr><td colspan="8" class="empty">Không có tệp khách nào khớp.</td></tr>'; return; }
+  tb.innerHTML = list.map(r => {
+    const ev = (r.evidence || []).length
+      ? `<details><summary>${r.evidence.length} dấu hiệu</summary><ul>${r.evidence.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` +
+        ((r.reasons || []).length ? `<ul>${r.reasons.map(e => `<li>điểm: ${esc(e)}</li>`).join('')}</ul>` : '') + `</details>`
+      : '<span class="mono">không có</span>';
+    return `<tr>
+      <td><div class="score p-${r.prio_key}">${r.score}</div><div class="prio p-${r.prio_key}">${esc(r.prio)}</div></td>
+      <td><span class="badge b-${r.source}"><span class="dot"></span>${esc(r.source_label)}</span>
+          <span class="conf ${r.confidence_key}">tin cậy: ${esc(r.confidence)}</span></td>
+      <td><div class="name">${esc(r.name)}</div>
+          <div class="mono">psid ${esc(r.psid)}${r.phone ? ' · ' + esc(r.phone) : ''}</div></td>
+      <td class="hide-sm"><div>${esc(r.page_name || '(không rõ)')}</div><div class="mono">${esc(r.page_id)}</div></td>
+      <td class="hide-sm">${esc(r.updated_disp)}</td>
+      <td class="hide-sm"><div class="snip">${esc(r.snippet)}</div><div class="mono">${r.message_count} tin</div></td>
+      <td>${r.unread > 0 ? `<b class="p-hot">${r.unread}</b>` : '<span class="mono">0</span>'}</td>
+      <td>${ev}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+  document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+  c.classList.add('active');
+  filter = c.dataset.f;
+  render();
+}));
+document.getElementById('q').addEventListener('input', e => { query = e.target.value.trim().toLowerCase(); render(); });
+document.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.sort;
+  if (sortKey === k) sortDir *= -1;
+  else { sortKey = k; sortDir = (k === 'score' || k === 'unread') ? -1 : 1; }
+  render();
+}));
+render();
+</script>
+</body>
+</html>

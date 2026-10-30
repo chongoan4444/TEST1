@@ -1,0 +1,7 @@
+{
+  "tag_map": {
+    "4":   { "name": "Khách mới",     "source": null },
+    "83":  { "name": "Từ quảng cáo",  "source": "ads" },
+    "172": { "name": "Khách live",    "source": "live" }
+  }
+}
