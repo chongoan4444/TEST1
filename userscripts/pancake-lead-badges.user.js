@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.2.0
+// @version      3.2.1
 // @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên cho các hội thoại ĐANG HIỂN THỊ trên Pancake. Alt+O bật/tắt. Tự dò lại DOM khi Pancake đổi giao diện.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -294,7 +294,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.2.0';
+  const VERSION = '3.2.1';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -775,6 +775,14 @@
     }, wait);
   }
 
+  // Gắn nhãn NGAY (không chờ timer) — dùng khi bật lại giao diện hoặc khi tab được focus lại.
+  function decorateNow() {
+    if (decorTimer) { clearTimeout(decorTimer); decorTimer = null; }
+    lastDecor = Date.now();
+    try { decorate(); } catch (e) { LOG('decorate lỗi', e); }
+    schedulePaint();
+  }
+
   function clearChips() {
     document.querySelectorAll('.__ls_chip').forEach(el => el.remove());
     chips.clear();
@@ -860,6 +868,7 @@
 
   function ensureFab() {
     if (fab && document.contains(fab)) return;
+    fab = null;                       // bị React/Pancake xoá -> dựng lại
     fab = document.createElement('div');
     fab.id = '__lead_source_fab';
     fab.style.cssText = 'position:fixed;z-index:2147483000;right:16px;bottom:16px;';
@@ -1027,7 +1036,7 @@
   function focusInList(conv) {
     if (!conv || !conv.id) return;
     const chip = document.querySelector('.__ls_chip[data-ls-id="' + cssEscape(conv.id) + '"]');
-    const row = (chip && chip.closest(SEL_ROW)) || document.getElementById(conv.id) ||
+    const row = (chip && chip.closest(selRow())) || document.getElementById(conv.id) ||
       document.querySelector('[id^="' + cssEscape(conv.id) + '__"]');
     if (!row) { LOG('Không thấy dòng của', conv.id, '— cuộn danh sách hoặc đổi bộ lọc.'); return; }
     row.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -1051,8 +1060,9 @@
     } else {
       ensureHost();
       host.style.display = '';
+      attachObserver();
       paint(true);
-      scheduleDecor(true);
+      decorateNow();          // <- trước đây chỉ hẹn giờ, timer bị nuốt là mất nhãn luôn
     }
     syncFab();
     return CFG.enabled;
@@ -1131,10 +1141,18 @@
   setTimeout(tick, 1200);
   setInterval(tick, Math.max(8000, CFG.pollMs || 25000));
   setInterval(() => {                     // quét dự phòng + gắn lại observer nếu Pancake render lại
-    if (document.hidden || !CFG.enabled) return;
+    if (document.hidden) return;
+    syncFab();                            // giữ nút bật lại luôn tồn tại
+    if (!CFG.enabled) return;
     attachObserver();
-    scheduleDecor(true);
+    if (dom.rows && !dom.labeled) { chips.clear(); decorateNow(); }   // tự phục hồi
+    else scheduleDecor(true);
   }, Math.max(800, CFG.scanMs));
+
+  // quay lại tab -> gắn lại ngay (trong lúc ẩn tab Pancake có thể đã render lại danh sách)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && CFG.enabled) decorateNow();
+  });
   setInterval(() => { if (CFG.enabled && CFG.showPanel) schedulePaint(); }, 3000);
 
   // ======================================================================

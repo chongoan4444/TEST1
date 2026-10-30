@@ -95,6 +95,7 @@ __leadSource.debug()      // in + copy báo cáo chẩn đoán (gửi mình là 
 | `rowsNoName > 0` | có dòng không tìm thấy tên khách → nhãn gắn vào dòng chót (đầu dòng) | gửi `sampleRowHtml` để mình thêm selector |
 | `domMode: "id-scan"` | đang chạy chế độ dự phòng (vẫn đúng) | không cần làm gì |
 | `verdict: "OK"` | mọi thứ đúng | không cần làm gì |
+| Tắt giao diện rồi bật lại mà **không có nhãn** | bản ≤3.2.0 chỉ *hẹn giờ* gắn nhãn khi bật lại; timer bị nuốt (hoặc tab vừa ẩn) là mất nhãn | đã sửa ở 3.2.1: bật lại là gắn **ngay**, kèm watchdog tự phục hồi + gắn lại khi quay về tab |
 
 Pancake dùng **2 kiểu đánh dấu dòng** (bản 3.2 nhận cả hai):
 
