@@ -1,0 +1,177 @@
+curl --url 'https://pancake.vn/api/v1/pages/675541385634278/conversations/675541385634278_28736922745969975/messages?' \
+
+  -H 'accept: application/json, text/plain, /' \
+
+  -H 'accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5' \
+
+  -H 'content-type: multipart/form-data; boundary=----WebKitFormBoundaryS5neGfG6Bv10VbHq' \
+
+  -b '_fbp=fb.1.1789102456289.944497458155465367; gclau=1.1.1895013025.1789102456; gid=GA1.2.133624231.1791014329; ga_VG3LFY1C9R=GS2.1.s1791014328$o30$g1$t1791027462$j60$l0$h0; jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTmd1eeG7hW4gVHXhuqVuIiwiZXhwIjoxNzk5MjkwNjM3LCJhcHBsaWNhdGlvbiI6MSwidWlkIjoiMjk5NjY2YmQtNzU1OS00YzQ4LWIwOTQtYjI5NTViOTJkNzU3Iiwic2Vzc2lvbl9pZCI6ImZiNzBkOGI3LTM0YTctNGQxNy1iNDM1LWE0MTlmOGYzZDhjOSIsImlhdCI6MTc5MTUxNDYzNywicGFuY2FrZV9pZCI6IjBlMzIzODk5LTAwMjctNDg3MC05MGU4LTdjMTRkNTdkMmU0YSIsImZiX2lkIjoiMTM1MTU1MjA3MzEwNzI2IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6Ik5ndXnhu4VuIFR14bqlbiJ9.2V0YTTWhS9No-qEPuY84jwp24VKX6KpkjbB-4qiG_vk; jwt_http_only=v3.a825eb758a0cf48c; locale=vi; gat=1; ga=GA1.1.1555905925.1789102456; gaVG3LFY1C9R=GS2.1.s1792194850$o48$g1$t1792210302$j58$l0$h0; gaNCVX3Z1MWB=GS2.1.s1792194851$o37$g1$t1792210302$j58$l0$h0' \
+
+  -H 'origin: https://pancake.vn' \
+
+  -H 'priority: u=1, i' \
+
+  -H 'referer: https://pancake.vn/675541385634278' \
+
+  -H 'sec-ch-ua: "Google Chrome";v="155", "Chromium";v="155", "Not(A:Brand";v="24"' \
+
+  -H 'sec-ch-ua-mobile: ?0' \
+
+  -H 'sec-ch-ua-platform: "Windows"' \
+
+  -H 'sec-fetch-dest: empty' \
+
+  -H 'sec-fetch-mode: cors' \
+
+  -H 'sec-fetch-site: same-origin' \
+
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36' \
+
+  --data-raw $'------WebKitFormBoundaryS5neGfG6Bv10VbHq\r\nContent-Disposition: form-data; name="action"\r\n\r\nreply_inbox\r\n------WebKitFormBoundaryS5neGfG6Bv10VbHq\r\nContent-Disposition: form-data; name="message"\r\n\r\nChị ơi ❤️\r\nhnay shop đang có chương trình MIỄN SHIP đó ạ, chị đặt hàng dịp này để hưởng ưu đãi nhé?\r\n------WebKitFormBoundaryS5neGfG6Bv10VbHq\r\nContent-Disposition: form-data; name="send_by_platform"\r\n\r\nweb\r\n------WebKitFormBoundaryS5neGfG6Bv10VbHq--\r\n'
+
+curl --url 'https://pancake.vn/api/v1/pages/675541385634278/conversations/675541385634278_28736922745969975/messages/fill_admin_name?' \
+
+  -H 'accept: application/json, text/plain, /' \
+
+  -H 'accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5' \
+
+  -H 'content-type: application/json' \
+
+  -b '_fbp=fb.1.1789102456289.944497458155465367; gclau=1.1.1895013025.1789102456; gid=GA1.2.133624231.1791014329; ga_VG3LFY1C9R=GS2.1.s1791014328$o30$g1$t1791027462$j60$l0$h0; jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTmd1eeG7hW4gVHXhuqVuIiwiZXhwIjoxNzk5MjkwNjM3LCJhcHBsaWNhdGlvbiI6MSwidWlkIjoiMjk5NjY2YmQtNzU1OS00YzQ4LWIwOTQtYjI5NTViOTJkNzU3Iiwic2Vzc2lvbl9pZCI6ImZiNzBkOGI3LTM0YTctNGQxNy1iNDM1LWE0MTlmOGYzZDhjOSIsImlhdCI6MTc5MTUxNDYzNywicGFuY2FrZV9pZCI6IjBlMzIzODk5LTAwMjctNDg3MC05MGU4LTdjMTRkNTdkMmU0YSIsImZiX2lkIjoiMTM1MTU1MjA3MzEwNzI2IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6Ik5ndXnhu4VuIFR14bqlbiJ9.2V0YTTWhS9No-qEPuY84jwp24VKX6KpkjbB-4qiG_vk; jwt_http_only=v3.a825eb758a0cf48c; locale=vi; gat=1; ga=GA1.1.1555905925.1789102456; gaVG3LFY1C9R=GS2.1.s1792194850$o48$g1$t1792210302$j58$l0$h0; gaNCVX3Z1MWB=GS2.1.s1792194851$o37$g1$t1792210302$j58$l0$h0' \
+
+  -H 'origin: https://pancake.vn' \
+
+  -H 'priority: u=1, i' \
+
+  -H 'referer: https://pancake.vn/675541385634278' \
+
+  -H 'sec-ch-ua: "Google Chrome";v="155", "Chromium";v="155", "Not(A:Brand";v="24"' \
+
+  -H 'sec-ch-ua-mobile: ?0' \
+
+  -H 'sec-ch-ua-platform: "Windows"' \
+
+  -H 'sec-fetch-dest: empty' \
+
+  -H 'sec-fetch-mode: cors' \
+
+  -H 'sec-fetch-site: same-origin' \
+
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36' \
+
+  --data-raw '{"timestamp":1792210319384,"need_remove_lock_crawl_fb_messages":false}'
+
+curl --url 'https://pancake.vn/api/v1/pages/675541385634278/check_inbox?' \
+
+  -X 'POST' \
+
+  -H 'accept: application/json, text/plain, /' \
+
+  -H 'accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5' \
+
+  -H 'content-length: 0' \
+
+  -b '_fbp=fb.1.1789102456289.944497458155465367; gclau=1.1.1895013025.1789102456; gid=GA1.2.133624231.1791014329; ga_VG3LFY1C9R=GS2.1.s1791014328$o30$g1$t1791027462$j60$l0$h0; jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTmd1eeG7hW4gVHXhuqVuIiwiZXhwIjoxNzk5MjkwNjM3LCJhcHBsaWNhdGlvbiI6MSwidWlkIjoiMjk5NjY2YmQtNzU1OS00YzQ4LWIwOTQtYjI5NTViOTJkNzU3Iiwic2Vzc2lvbl9pZCI6ImZiNzBkOGI3LTM0YTctNGQxNy1iNDM1LWE0MTlmOGYzZDhjOSIsImlhdCI6MTc5MTUxNDYzNywicGFuY2FrZV9pZCI6IjBlMzIzODk5LTAwMjctNDg3MC05MGU4LTdjMTRkNTdkMmU0YSIsImZiX2lkIjoiMTM1MTU1MjA3MzEwNzI2IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6Ik5ndXnhu4VuIFR14bqlbiJ9.2V0YTTWhS9No-qEPuY84jwp24VKX6KpkjbB-4qiG_vk; jwt_http_only=v3.a825eb758a0cf48c; locale=vi; gat=1; ga=GA1.1.1555905925.1789102456; gaVG3LFY1C9R=GS2.1.s1792194850$o48$g1$t1792210302$j58$l0$h0; gaNCVX3Z1MWB=GS2.1.s1792194851$o37$g1$t1792210302$j58$l0$h0' \
+
+  -H 'origin: https://pancake.vn' \
+
+  -H 'priority: u=1, i' \
+
+  -H 'referer: https://pancake.vn/675541385634278' \
+
+  -H 'sec-ch-ua: "Google Chrome";v="155", "Chromium";v="155", "Not(A:Brand";v="24"' \
+
+  -H 'sec-ch-ua-mobile: ?0' \
+
+  -H 'sec-ch-ua-platform: "Windows"' \
+
+  -H 'sec-fetch-dest: empty' \
+
+  -H 'sec-fetch-mode: cors' \
+
+  -H 'sec-fetch-site: same-origin' \
+
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36'
+
+curl --url 'https://pancake.vn/api/v1/pages/675541385634278/contents/touch?' \
+
+  -H 'accept: application/json, text/plain, /' \
+
+  -H 'accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5' \
+
+  -H 'content-type: application/json' \
+
+  -b '_fbp=fb.1.1789102456289.944497458155465367; gclau=1.1.1895013025.1789102456; gid=GA1.2.133624231.1791014329; ga_VG3LFY1C9R=GS2.1.s1791014328$o30$g1$t1791027462$j60$l0$h0; jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTmd1eeG7hW4gVHXhuqVuIiwiZXhwIjoxNzk5MjkwNjM3LCJhcHBsaWNhdGlvbiI6MSwidWlkIjoiMjk5NjY2YmQtNzU1OS00YzQ4LWIwOTQtYjI5NTViOTJkNzU3Iiwic2Vzc2lvbl9pZCI6ImZiNzBkOGI3LTM0YTctNGQxNy1iNDM1LWE0MTlmOGYzZDhjOSIsImlhdCI6MTc5MTUxNDYzNywicGFuY2FrZV9pZCI6IjBlMzIzODk5LTAwMjctNDg3MC05MGU4LTdjMTRkNTdkMmU0YSIsImZiX2lkIjoiMTM1MTU1MjA3MzEwNzI2IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6Ik5ndXnhu4VuIFR14bqlbiJ9.2V0YTTWhS9No-qEPuY84jwp24VKX6KpkjbB-4qiG_vk; jwt_http_only=v3.a825eb758a0cf48c; locale=vi; gat=1; ga=GA1.1.1555905925.1789102456; gaVG3LFY1C9R=GS2.1.s1792194850$o48$g1$t1792210302$j58$l0$h0; gaNCVX3Z1MWB=GS2.1.s1792194851$o37$g1$t1792210302$j58$l0$h0' \
+
+  -H 'origin: https://pancake.vn' \
+
+  -H 'priority: u=1, i' \
+
+  -H 'referer: https://pancake.vn/675541385634278' \
+
+  -H 'sec-ch-ua: "Google Chrome";v="155", "Chromium";v="155", "Not(A:Brand";v="24"' \
+
+  -H 'sec-ch-ua-mobile: ?0' \
+
+  -H 'sec-ch-ua-platform: "Windows"' \
+
+  -H 'sec-fetch-dest: empty' \
+
+  -H 'sec-fetch-mode: cors' \
+
+  -H 'sec-fetch-site: same-origin' \
+
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36' \
+
+  --data-raw '{"content_ids":[]}'
+
+curl --url 'https://pancake.vn/api/v1/logs/pancake_exception_log?love' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5' \
+  -H 'content-type: application/json' \
+  -b '_fbp=fb.1.1789102456289.944497458155465367; _gcl_au=1.1.1895013025.1789102456; _gid=GA1.2.133624231.1791014329; _ga_VG3LFY1C9R=GS2.1.s1791014328$o30$g1$t1791027462$j60$l0$h0; jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTmd1eeG7hW4gVHXhuqVuIiwiZXhwIjoxNzk5MjkwNjM3LCJhcHBsaWNhdGlvbiI6MSwidWlkIjoiMjk5NjY2YmQtNzU1OS00YzQ4LWIwOTQtYjI5NTViOTJkNzU3Iiwic2Vzc2lvbl9pZCI6ImZiNzBkOGI3LTM0YTctNGQxNy1iNDM1LWE0MTlmOGYzZDhjOSIsImlhdCI6MTc5MTUxNDYzNywicGFuY2FrZV9pZCI6IjBlMzIzODk5LTAwMjctNDg3MC05MGU4LTdjMTRkNTdkMmU0YSIsImZiX2lkIjoiMTM1MTU1MjA3MzEwNzI2IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6Ik5ndXnhu4VuIFR14bqlbiJ9.2V0YTTWhS9No-qEPuY84jwp24VKX6KpkjbB-4qiG_vk; jwt_http_only=v3.a825eb758a0cf48c; locale=vi; _gat=1; _ga=GA1.1.1555905925.1789102456; _ga_VG3LFY1C9R=GS2.1.s1792194850$o48$g1$t1792210302$j58$l0$h0; _ga_NCVX3Z1MWB=GS2.1.s1792194851$o37$g1$t1792210302$j58$l0$h0' \
+  -H 'origin: https://pancake.vn' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://pancake.vn/675541385634278' \
+  -H 'sec-ch-ua: "Google Chrome";v="155", "Chromium";v="155", "Not(A:Brand";v="24"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "Windows"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-origin' \
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36' \
+  --data-raw $'{"payload":"TypeError: Cannot read properties of undefined (reading \'protocol\')\\n    at https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:18652\\n    at eV (https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:21057)\\n    at https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:21220\\n    at new Promise (<anonymous>)\\n    at xhr (https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:21174)\\n    at tc.to (https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:28137)\\n    at tc._request (https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:30927)\\n    at tc.request (https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:29478)\\n    at Function.request (https://pancake.vn/_next/static/chunks/vendor-axios-ef3510e3ae087c86.v6.js:1:205)\\n    at u.doExecute (https://pancake.vn/_next/static/chunks/pages/_app-cdf7fdab8c5d1556.v6.js:1:793431)","type":"http_request","context":{"current_page_id":"675541385634278"},"source":"frontend"}'
+
+curl --url 'https://pancake.vn/api/v1/pages/unread_conv_pages_count?' \
+
+  -H 'accept: application/json' \
+
+  -H 'accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5' \
+
+  -H 'content-type: application/json' \
+
+  -b '_fbp=fb.1.1789102456289.944497458155465367; gclau=1.1.1895013025.1789102456; gid=GA1.2.133624231.1791014329; ga_VG3LFY1C9R=GS2.1.s1791014328$o30$g1$t1791027462$j60$l0$h0; jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTmd1eeG7hW4gVHXhuqVuIiwiZXhwIjoxNzk5MjkwNjM3LCJhcHBsaWNhdGlvbiI6MSwidWlkIjoiMjk5NjY2YmQtNzU1OS00YzQ4LWIwOTQtYjI5NTViOTJkNzU3Iiwic2Vzc2lvbl9pZCI6ImZiNzBkOGI3LTM0YTctNGQxNy1iNDM1LWE0MTlmOGYzZDhjOSIsImlhdCI6MTc5MTUxNDYzNywicGFuY2FrZV9pZCI6IjBlMzIzODk5LTAwMjctNDg3MC05MGU4LTdjMTRkNTdkMmU0YSIsImZiX2lkIjoiMTM1MTU1MjA3MzEwNzI2IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6Ik5ndXnhu4VuIFR14bqlbiJ9.2V0YTTWhS9No-qEPuY84jwp24VKX6KpkjbB-4qiG_vk; jwt_http_only=v3.a825eb758a0cf48c; locale=vi; gat=1; ga=GA1.1.1555905925.1789102456; gaVG3LFY1C9R=GS2.1.s1792194850$o48$g1$t1792210302$j58$l0$h0; gaNCVX3Z1MWB=GS2.1.s1792194851$o37$g1$t1792210302$j58$l0$h0' \
+
+  -H 'origin: https://pancake.vn' \
+
+  -H 'priority: u=1, i' \
+
+  -H 'referer: https://pancake.vn/675541385634278' \
+
+  -H 'sec-ch-ua: "Google Chrome";v="155", "Chromium";v="155", "Not(A:Brand";v="24"' \
+
+  -H 'sec-ch-ua-mobile: ?0' \
+
+  -H 'sec-ch-ua-platform: "Windows"' \
+
+  -H 'sec-fetch-dest: empty' \
+
+  -H 'sec-fetch-mode: cors' \
+
+  -H 'sec-fetch-site: same-origin' \
+
+  -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36' \
+
+  --data-raw '{"list_page_ids":["898735919982398","694078980461601","866616433193901","578746295327894","764740356715221","435021089689053","637839152744071","769625892902516","426973683841351","881264518397934","797813096755447","675541385634278","834072796450267","448189508385420","537949306074330","689375157595846"]}'
+
