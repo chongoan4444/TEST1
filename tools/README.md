@@ -74,7 +74,7 @@ __leadSource.help()
 
 ### 🚑 Không thấy nhãn / danh sách không cập nhật?
 
-Pancake đổi giao diện là chuyện bình thường — bản 3.1 tự dò lại DOM (3 lớp: selector chuẩn →
+Pancake đổi giao diện là chuyện bình thường — bản 3.2 tự dò lại DOM (3 lớp: selector chuẩn →
 con của `.conversation-list` → quét mọi phần tử có `id` dạng `<page>_<psid>`), và đọc dữ liệu theo
 **dấu hiệu dữ liệu** (`json.conversations`, `messages[].conversation_id`) chứ không phụ thuộc URL.
 
@@ -89,8 +89,26 @@ __leadSource.debug()      // in + copy báo cáo chẩn đoán (gửi mình là 
 | `enabled: false` | bạn đã ẩn bằng Alt+O/✕ ở lần trước | bấm nút 🏷️ góc phải hoặc `__leadSource.show()` |
 | `convs: 0` | chưa bắt được danh sách hội thoại | F5 lại trang Hội thoại; nếu vẫn 0, gửi mình `debug()` |
 | `domMode: "none"`, `rowsFound: 0` | DOM đổi cấu trúc, không tìm ra dòng | gửi mình `sampleRowHtml` trong báo cáo |
-| `rowsFound > 0`, `rowsWithChip: 0` | tìm ra dòng nhưng không thấy tên để gắn nhãn | gửi mình `sampleRowHtml` |
+| `rowsFound > 0`, `rowsWithChip: 0` | tìm ra dòng nhưng không gắn được nhãn | xem `verdict` + `sampleRowHtml` bên dưới |
+| `verdict: "thấy dòng nhưng KHÔNG đọc được id hội thoại"` | id nằm ở chỗ khác (thẻ bọc / thuộc tính khác) | bản 3.2 đã tự leo thẻ bọc; nếu vẫn lỗi, gửi `sampleRowHtml` |
+| `idFromWrapper: true` | id hội thoại nằm ở **thẻ bọc** `div[offsetx]`, dòng con không có id | bình thường ở màn hình mới, bản 3.2 xử lý được |
+| `rowsNoName > 0` | có dòng không tìm thấy tên khách → nhãn gắn vào dòng chót (đầu dòng) | gửi `sampleRowHtml` để mình thêm selector |
 | `domMode: "id-scan"` | đang chạy chế độ dự phòng (vẫn đúng) | không cần làm gì |
+| `verdict: "OK"` | mọi thứ đúng | không cần làm gì |
+
+Pancake dùng **2 kiểu đánh dấu dòng** (bản 3.2 nhận cả hai):
+
+```html
+<!-- A. id ngay trên dòng -->
+<div id="675541385634278_28794751720156211__0" class="media conversation-list-item">…
+
+<!-- B. id ở thẻ bọc, dòng con KHÔNG có id  (màn hình dùng virtual list) -->
+<div offsetx="0" id="675541385634278_28794751720156211">
+  <div class="media conversation-list-item">…
+```
+
+Kiểu B chính là nguyên nhân lỗi "0 nhãn" của bản 3.1: dòng vẫn tìm ra nhưng `id` rỗng nên
+không biết đang gắn cho hội thoại nào. Bản 3.2 leo lên tối đa 7 cấp thẻ bọc để lấy id.
 
 Có thể chỉ định selector trực tiếp nếu biết:
 

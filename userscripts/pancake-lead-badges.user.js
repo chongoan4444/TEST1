@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.1.0
+// @version      3.2.0
 // @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn + điểm ưu tiên cho các hội thoại ĐANG HIỂN THỊ trên Pancake. Alt+O bật/tắt. Tự dò lại DOM khi Pancake đổi giao diện.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -294,7 +294,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.1.0';
+  const VERSION = '3.2.0';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -518,18 +518,41 @@
   }
 
   // chẩn đoán: đang khớp được bao nhiêu dòng bằng cách nào
-  const dom = { mode: 'none', rows: 0, visible: 0, labeled: 0 };
+  const dom = { mode: 'none', rows: 0, visible: 0, labeled: 0, noName: 0, idFromWrapper: false };
 
   function listContainer() {
     const l = safeQuery(selList());
     return l.length ? l[0] : document.body;
   }
 
-  function convIdOf(el) {
+  // id hội thoại của CHÍNH phần tử: `<page>_<psid>` hoặc `<page>_<psid>__<n>`
+  const RE_CONV_ID = /^(\d{5,}_\d{5,})(?:__\d+)?$/;
+  function selfConvId(el) {
     const id = el && el.id;
     if (!id) return null;
-    const m = /^(\d{5,}_\d{5,})(?:__\d+)?$/.exec(id);
+    const m = RE_CONV_ID.exec(id);
     return m ? m[1] : null;
+  }
+
+  // Pancake có 2 kiểu đánh dấu: id nằm ngay trên dòng, HOẶC nằm trên thẻ bọc
+  // `<div offsetx id="page_psid"><div class="media conversation-list-item">`.
+  // => phải leo lên tối đa 7 cấp mới không bị "0 nhãn".
+  function convIdOf(el) {
+    let n = el, depth = 0;
+    while (n && n.getAttribute && depth < 7) {
+      const id = selfConvId(n);
+      if (id) { if (n !== el) dom.idFromWrapper = true; return id; }
+      n = n.parentElement; depth++;
+    }
+    return null;
+  }
+
+  // phần tử tìm được có thể là thẻ bọc -> lấy đúng dòng bên trong
+  function rowOf(el) {
+    if (!el) return null;
+    try { if (el.matches(selRow())) return el; } catch (e) {}
+    const inner = safeQuery(selRow(), el);
+    return inner.length ? inner[0] : el;
   }
 
   /** Tìm dòng hội thoại: selector chuẩn → con của list → quét id toàn trang. */
@@ -541,13 +564,21 @@
     if (cont.length) {
       const kids = cont[0].querySelectorAll('[id]');
       const good = [];
-      for (let i = 0; i < kids.length; i++) if (convIdOf(kids[i])) good.push(kids[i]);
+      for (let i = 0; i < kids.length; i++) {
+        if (!selfConvId(kids[i])) continue;
+        const r = rowOf(kids[i]);
+        if (good.indexOf(r) < 0) good.push(r);
+      }
       if (good.length) { dom.mode = 'list-children'; return good; }
     }
 
     const all = document.querySelectorAll('[id]');
     const good = [];
-    for (let i = 0; i < all.length && good.length < 400; i++) if (convIdOf(all[i])) good.push(all[i]);
+    for (let i = 0; i < all.length && good.length < 400; i++) {
+      if (!selfConvId(all[i])) continue;
+      const r = rowOf(all[i]);
+      if (good.indexOf(r) < 0) good.push(r);
+    }
     dom.mode = good.length ? 'id-scan' : 'none';
     return good;
   }
@@ -558,11 +589,16 @@
     dom.rows = rows.length;
     if (!rows.length) { dom.visible = 0; return []; }
 
-    let top = 0, bottom = window.innerHeight || 800;
+    const vh = window.innerHeight || 800;
+    let top = 0, bottom = vh;
     const cont = safeQuery(selList());
     if (cont.length) {
       let cr; try { cr = cont[0].getBoundingClientRect(); } catch (e) { cr = null; }
-      if (cr && cr.height > 0) { top = cr.top; bottom = cr.bottom; }
+      // chỉ tính phần GIAO giữa khung danh sách và khung nhìn (khung list có thể cao hơn màn hình)
+      if (cr && cr.height > 0 && Math.min(vh, cr.bottom) > Math.max(0, cr.top)) {
+        top = Math.max(0, cr.top);
+        bottom = Math.min(vh, cr.bottom);
+      }
     }
 
     const out = [];
@@ -582,8 +618,15 @@
   /** Tên khách trong 1 dòng: selector → fallback lá đầu tiên có chữ. */
   function nameNode(row) {
     if (!row) return null;
-    const n = safeQuery(selName(), row);
-    if (n.length) return n[0];
+    // querySelectorAll gộp nhiều selector sẽ trả về theo THỨ TỰ DOM, không phải thứ tự
+    // ưu tiên (.name-module-text đứng trước .name-text) -> phải thử từng cái một.
+    const sels = selName().split(',');
+    for (let i = 0; i < sels.length; i++) {
+      const sel = sels[i].trim();
+      if (!sel) continue;
+      const n = safeQuery(sel, row);
+      for (let j = 0; j < n.length; j++) if ((n[j].textContent || '').trim()) return n[j];
+    }
     const leaves = row.querySelectorAll('span,div,b,strong,p,a');
     for (let i = 0; i < leaves.length; i++) {
       const el = leaves[i];
@@ -677,7 +720,7 @@
   function decorate() {
     if (!CFG.enabled || !CFG.showChips || document.hidden) return;
     const rows = visibleRows();
-    dom.labeled = 0;
+    dom.labeled = 0; dom.noName = 0; dom.idFromWrapper = false;
     if (!rows.length) { schedulePaint(); return; }
     const now = Date.now();
     const needEnrich = [];
@@ -700,10 +743,21 @@
       chip = row.querySelector('.__ls_chip');
       if (chip) { chips.set(convId, chip); updateChip(chip, lead, pending); dom.labeled++; return; }
 
+      // 3 đường gắn, luôn cố cho nhãn xuất hiện thay vì bỏ qua dòng
       const nameEl = nameNode(row);
-      if (!nameEl) return;
       const c = makeChip(lead, pending);
-      try { nameEl.insertAdjacentElement('afterend', c); } catch (e) { return; }
+      let placed = false;
+      if (nameEl) {
+        try { nameEl.insertAdjacentElement('afterend', c); placed = true; } catch (e) {}
+      }
+      if (!placed) {
+        const snip = safeQuery(selSnippet(), row);
+        if (snip.length) { try { snip[0].insertAdjacentElement('beforebegin', c); placed = true; } catch (e) {} }
+      }
+      if (!placed) {
+        try { row.insertAdjacentElement('afterbegin', c); placed = true; } catch (e) {}
+      }
+      if (!placed) { dom.noName++; return; }
       chips.set(convId, c);
       dom.labeled++;
     });
@@ -915,7 +969,8 @@
       '<span class="' + (state.errors.length || (dom.rows && !dom.labeled) ? 'err' : '') + '">' +
       esc(state.errors.length ? state.errors[state.errors.length - 1].msg
         : (dom.rows && !dom.labeled ? 'không gắn được nhãn → __leadSource.debug()'
-          : (dom.rows ? dom.labeled + ' nhãn / ' + dom.visible + ' đang hiện' : 'chưa thấy dòng hội thoại'))) + '</span></div>';
+          : (dom.rows ? dom.labeled + ' nhãn / ' + dom.visible + ' đang hiện' +
+            (dom.noName ? ' · ' + dom.noName + ' dòng thiếu tên' : '') : 'chưa thấy dòng hội thoại'))) + '</span></div>';
 
     if (wasCollapsed) wrap.classList.add('collapsed');
     const newList = shadow.querySelector('.list');
@@ -1126,10 +1181,19 @@
         rowsFound: rows.length,
         rowsVisible: vis.length,
         rowsWithChip: document.querySelectorAll('.__ls_chip').length,
+        rowsNoName: dom.noName,
+        idFromWrapper: dom.idFromWrapper,
+        rowHasOwnId: !!(sample && selfConvId(sample)),
+        sampleConvId: sample ? convIdOf(sample) : null,
+        nameNodeFound: sample ? !!nameNode(sample) : null,
         selectors: { list: selList(), row: selRow(), name: selName() },
-        sampleRowHtml: sample ? String(sample.outerHTML).slice(0, 800) : null,
+        sampleRowHtml: sample ? String(sample.outerHTML).slice(0, 1200) : null,
         errors: state.errors.map(e => e.msg),
       };
+      rep.verdict = !rep.rowsFound ? 'không thấy dòng hội thoại nào (kiểm tra selectors.row)'
+        : (!rep.sampleConvId ? 'thấy dòng nhưng KHÔNG đọc được id hội thoại'
+          : (!rep.rowsWithChip ? 'đọc được id nhưng chưa gắn được nhãn (kiểm tra enabled/showChips/tab ẩn)'
+            : 'OK'));
       console.log('%c[lead-source] chẩn đoán', 'color:#7c3aed;font-weight:700', rep);
       try {
         navigator.clipboard.writeText(JSON.stringify(rep, null, 2));
