@@ -64,11 +64,15 @@ window.fetch = function (input) {
   let body;
   if (/\\/messages/.test(url)) {
     if (/separate_pos=true/.test(url) && !/user_view=true/.test(url)) {
-      // biến thể THỨ HAI: trả tin nhắn thật (có ad_click)
-      body = { success: true, messages: [
-        { id: 'm1', type: 'INBOX', conversation_id: ${JSON.stringify(CONV)},
-          attachments: [{ type: 'ad_click', ad_id: '1202502696893800', url: 'https://facebook.com/1' }] }
-      ] };
+      // biến thể THỨ HAI: trả tin nhắn THẬT nhưng KHÔNG có ad_click trong tin nào —
+      // đúng ca người dùng gặp: ad_clicks nằm ở cấp hội thoại, không nằm trong trang tin mới nhất.
+      body = { success: true,
+        messages: [
+          { id: 'm1', type: 'INBOX', conversation_id: ${JSON.stringify(CONV)}, attachments: [] },
+          { id: 'm2', type: 'INBOX', conversation_id: ${JSON.stringify(CONV)}, attachments: [] }
+        ],
+        ad_clicks: { ${JSON.stringify(CUST)}: [{ ad_id: '1202502696893800', post_id: '881264518397934_122178739184959361' }] },
+        conversation_id: ${JSON.stringify(CONV)} };
     } else {
       // biến thể đầu: Pancake trả hồ sơ khách, KHÔNG có messages (đúng như HAR)
       body = { success: true, customers: {}, available_for_report_phone_numbers: [], reports_by_phone: {} };
@@ -127,14 +131,15 @@ const chip = () => doc.querySelector('.__ls_chip');
   console.log('enrichLast:', JSON.stringify(rep.enrichLast));
 
   check(!!c, 'có nhãn trên dòng');
-  check(c && c.textContent === 'QC', 'nhãn là QC sau khi thử biến thể URL thứ hai (' + (c ? c.textContent : '—') + ')');
+  check(c && c.textContent === 'QC', 'nhãn là QC ngay từ trang tin mới nhất (' + (c ? c.textContent : '—') + ')');
+  check(c && c.textContent !== 'TN', 'KHÔNG hiện TN rồi mới đổi sang QC (lỗi cũ)');
   check(window.__calls.some(u => /messages/.test(u) && /user_view=true/.test(u)), 'đã thử biến thể URL đầu tiên');
   check(window.__calls.some(u => /messages/.test(u) && /separate_pos=true/.test(u) && !/user_view=true/.test(u)),
     'đã tự thử biến thể URL thứ hai');
   check(window.__calls.some(u => /messages/.test(u) && /customer_id=/.test(u)), 'URL có customer_id (lấy từ danh sách hội thoại)');
 
   const t = c ? c.title : '';
-  check(/ad_click/.test(t), 'tooltip nêu đúng căn cứ ad_click');
+  check(/ad_clicks|quảng cáo/i.test(t), 'tooltip nêu đúng căn cứ quảng cáo (' + t.split('\n')[2]?.slice(0, 60) + ')');
   check(errors.length === 0, 'không lỗi runtime' + (errors.length ? ': ' + errors[0] : ''));
 
   console.log('\n' + (fail ? '✗ FAIL (' + fail + ' lỗi)' : '✓ PASS — tự tìm được biến thể URL trả tin nhắn'));

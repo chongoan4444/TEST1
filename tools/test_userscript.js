@@ -47,6 +47,14 @@ const CASES = [
   { name: 'CHƯA đọc tin nhắn -> không đoán', conv: conv(), msgs: [], checked: false, want: 'unknown',
     evidenceHas: 'chưa đọc tin nhắn' },
   { name: 'cờ livestream thật', conv: conv(), msgs: [LIVE_MSG], checked: true, want: 'live', evidenceHas: 'livestream' },
+  // ca người dùng gặp: tin nhắn mới nhất KHÔNG có ad_click, nguồn nằm ở ad_clicks cấp hội thoại
+  { name: 'ad_clicks ở cấp hội thoại (không có ad_click trong tin)', conv: conv(),
+    msgs: [PLAIN_MSG, PLAIN_MSG], checked: true,
+    attr: { ad: [{ ad_id: '1202502696893800', post_id: '881264518397934_122178' }], adId: '1202502696893800', post: null, live: false },
+    want: 'ads', evidenceHas: 'bấm quảng cáo' },
+  { name: 'post ở cấp hội thoại', conv: conv(), msgs: [PLAIN_MSG], checked: true,
+    attr: { ad: [], adId: '', post: { id: '122178' }, live: false },
+    want: 'post', evidenceHas: 'bài viết' },
   { name: 'tag trên dòng chat do người dùng cấu hình', conv: conv({ domTags: ['QC'] }), msgs: [], checked: false,
     want: 'ads', evidenceHas: 'do bạn cấu hình', jsOnly: true },
 ];
@@ -63,11 +71,11 @@ for c in cases:
     conv = c["conv"]
     if c.get("domTags"):
         conv = dict(conv); conv["_domTags"] = c["domTags"]
-    src, conf, ev = L.classify(conv, c["msgs"], rules, checked=c["checked"])
+    src, conf, ev = L.classify(conv, c["msgs"], rules, checked=c["checked"], attr=c.get("attr"))
     out.append([src, conf])
 print(json.dumps(out))
 `;
-  const input = JSON.stringify(CASES.map(c => ({ conv: c.conv, msgs: c.msgs, checked: c.checked })));
+  const input = JSON.stringify(CASES.map(c => ({ conv: c.conv, msgs: c.msgs, checked: c.checked, attr: c.attr || null })));
   const res = execFileSync('python3', ['-c', script], { input, encoding: 'utf8' });
   return JSON.parse(res);
 }
@@ -77,7 +85,7 @@ const check = (ok, msg) => { console.log((ok ? '✓ ' : '✗ ') + msg); if (!ok)
 
 console.log('Luật phân loại (userscript JS)\n' + '-'.repeat(72));
 CASES.forEach(c => {
-  const r = classify(c.conv, c.msgs, c.checked);
+  const r = classify(c.conv, c.msgs, c.checked, c.attr);
   const ev = (r.evidence || []).join(' | ');
   check(r.source === c.want, `${c.name}: ${r.source} (mong đợi ${c.want})`);
   check(ev.toLowerCase().indexOf(c.evidenceHas.toLowerCase()) >= 0,
@@ -100,7 +108,7 @@ try {
 if (py) {
   CASES.forEach((c, i) => {
     if (c.jsOnly) { console.log('  · ' + c.name + ': bỏ qua (chỉ userscript đọc được tag trên DOM)'); return; }
-    const js = classify(c.conv, c.msgs, c.checked).source;
+    const js = classify(c.conv, c.msgs, c.checked, c.attr).source;
     check(py[i][0] === js, `${c.name}: JS=${js} · Python=${py[i][0]}`);
   });
 }

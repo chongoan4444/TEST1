@@ -164,7 +164,7 @@ def load_source(path):
 
 def collect(payloads, har=None):
     """Gom danh sách conversation + message từ mọi payload."""
-    conversations, messages = [], {}
+    conversations, messages, attrs = [], {}, {}
 
     for url, obj in payloads:
         if not isinstance(obj, dict):
@@ -177,6 +177,9 @@ def collect(payloads, har=None):
             msgs = obj.get("messages") or obj.get("data")
             if isinstance(msgs, list):
                 messages.setdefault(m.group(1), []).extend(msgs)
+                a = extract_attribution(obj)
+                if a["ad"] or a["post"] or a["live"]:
+                    attrs[m.group(1)] = a
 
     # HAR: bắt thêm mọi entry có URL .../conversations/<id>/messages
     if har:
@@ -189,6 +192,9 @@ def collect(payloads, har=None):
                 msgs = obj.get("messages") or obj.get("data")
                 if isinstance(msgs, list):
                     messages.setdefault(m.group(1), []).extend(msgs)
+                    a = extract_attribution(obj)
+                    if a["ad"] or a["post"] or a["live"]:
+                        attrs[m.group(1)] = a
 
     seen, unique = set(), []
     for c in conversations:
@@ -197,7 +203,7 @@ def collect(payloads, har=None):
             continue
         seen.add(key)
         unique.append(c)
-    return unique, messages
+    return unique, messages, attrs
 
 
 def deep_find(obj, keys, path="", depth=0, out=None, max_depth=8):
@@ -265,7 +271,35 @@ def load_rules(path):
     return rules
 
 
-def classify(conv, msgs, rules, checked=None):
+def extract_attribution(payload):
+    """Pancake ghi nguồn ở CẤP HỘI THOẠI trong response tin nhắn:
+    ad_clicks {uuid: [...]}, activities[].ad_id, customers[].ad_clicks, post, cờ livestream.
+    (kiểm trên 31 response thật: 27 có ad_clicks)"""
+    out = {"ad": [], "post": None, "live": False, "ad_id": ""}
+    if not isinstance(payload, dict):
+        return out
+    ac = payload.get("ad_clicks")
+    if isinstance(ac, dict):
+        for v in ac.values():
+            if isinstance(v, list):
+                out["ad"].extend(v)
+    elif isinstance(ac, list):
+        out["ad"].extend(ac)
+    for a in (payload.get("activities") or []):
+        if isinstance(a, dict) and a.get("ad_id"):
+            out["ad"].append({"ad_id": a["ad_id"], "post_id": a.get("post_id")})
+    for c in (payload.get("customers") or []):
+        if isinstance(c, dict) and isinstance(c.get("ad_clicks"), list):
+            out["ad"].extend(c["ad_clicks"])
+    out["post"] = payload.get("post") or ({"id": payload["post_id"]} if payload.get("post_id") else None)
+    out["live"] = bool(payload.get("has_livestream_order") is True or payload.get("is_livestream_order") is True
+                       or payload.get("live_video_status") or payload.get("live_video_id"))
+    if out["ad"]:
+        out["ad_id"] = str(out["ad"][0].get("ad_id") or "")
+    return out
+
+
+def classify(conv, msgs, rules, checked=None, attr=None):
     """-> (source, confidence_key, evidence[list[str]])
 
     Chỉ kết luận khi có bằng chứng thật (xem README). Chưa đọc tin nhắn -> "unknown",
@@ -273,6 +307,15 @@ def classify(conv, msgs, rules, checked=None):
     """
     evidence = []
     source, confidence = None, "low"
+    attr = attr or {}
+
+    # ---- 0. nguồn cấp hội thoại (Pancake trả kèm response tin nhắn)
+    if attr.get("ad"):
+        source, confidence = "ads", "high"
+        first = attr["ad"][0] if isinstance(attr["ad"][0], dict) else {}
+        evidence.append("Pancake ghi nhận khách bấm quảng cáo · ad_id "
+                        + str(attr.get("ad_id") or first.get("ad_id") or "")
+                        + (f" · post_id {first.get('post_id')}" if first.get("post_id") else ""))
 
     conv_type = str(conv.get("type") or "").upper()
     msg_types = set()
@@ -329,6 +372,8 @@ def classify(conv, msgs, rules, checked=None):
                                  + (f" ({a.get('post_type')})" if a.get("post_type") else ""))
     is_comment_type = any(h in conv_type for h in COMMENT_TYPE_HINTS) or any(
         any(h in t for h in COMMENT_TYPE_HINTS) for t in msg_types)
+    if attr.get("post"):
+        post_hits.insert(0, "hội thoại gắn với bài viết (post) — Pancake trả trong dữ liệu tin nhắn")
     if post_hits or is_comment_type:
         if source is None:
             source, confidence = "post", ("high" if post_hits else "mid")
@@ -341,6 +386,8 @@ def classify(conv, msgs, rules, checked=None):
     # ---- 3. Livestream
     live_hits = [(p, v) for p, v in deep_find({"conv": conv, "messages": msgs}, LIVE_KEYS)
                  if v not in (None, "", {}, [], False, 0)]
+    if attr.get("live"):
+        live_hits.insert(0, ("ad_clicks", "hội thoại có cờ livestream trong dữ liệu tin nhắn"))
     live_type = False   # type INBOX/COMMENT không nói gì về livestream -> chỉ tin vào cờ thật
     if live_hits:
         if source is None:
@@ -386,8 +433,8 @@ def classify(conv, msgs, rules, checked=None):
     return source, confidence, evidence
 
 
-def build_row(conv, msgs, rules, now, tz_hours, checked=None):
-    source, confidence, evidence = classify(conv, msgs, rules, checked)
+def build_row(conv, msgs, rules, now, tz_hours, checked=None, attr=None):
+    source, confidence, evidence = classify(conv, msgs, rules, checked, attr)
 
     customers = conv.get("customers") or []
     cust = customers[0] if customers and isinstance(customers[0], dict) else {}
@@ -422,7 +469,7 @@ def build_row(conv, msgs, rules, now, tz_hours, checked=None):
         "updated_disp": fmt_local(updated, tz_hours),
         "last_customer_at": last_cust.isoformat() if last_cust else "",
         "at": (updated or last_cust).timestamp() if (updated or last_cust) else 0,
-        "checked": bool(checked) or bool(msgs),
+        "checked": bool(checked) or bool(msgs) or bool(attr and (attr.get("ad") or attr.get("post") or attr.get("live"))),
         "messages_loaded": len(msgs),
     }
 
@@ -686,7 +733,7 @@ def main(argv=None):
 
     rules = load_rules(args.rules)
     payloads, har = load_source(args.input)
-    convs, msgs = collect(payloads, har)
+    convs, msgs, attrs = collect(payloads, har)
 
     if not convs:
         print("Không tìm thấy conversation nào trong file.", file=sys.stderr)
@@ -695,7 +742,7 @@ def main(argv=None):
 
     now = parse_dt(args.now) or datetime.now(timezone.utc)
     rows = [build_row(c, msgs.get(c.get("id"), []), rules, now, args.tz,
-                      checked=(c.get("id") in msgs)) for c in convs]
+                      checked=(c.get("id") in msgs), attr=attrs.get(c.get("id"))) for c in convs]
     rows.sort(key=sort_rows)
 
     if args.source:

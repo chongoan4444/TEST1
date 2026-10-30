@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.6.0
+// @version      3.7.0
 // @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn cho các hội thoại ĐANG HIỂN THỊ trên Pancake — chỉ khi có bằng chứng thật, không chấm điểm, chưa đọc tin nhắn thì hiện "?". Alt+O bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -23,7 +23,7 @@
     showPanel: true,        // riêng bảng nổi (nút ▭) — nhãn trên dòng chat vẫn chạy
     showChips: true,
     showLegend: true,
-    pollMs: 25000,          // gọi lại danh sách hội thoại
+    pollMs: 45000,          // gọi lại danh sách hội thoại
     scanMs: 3000,           // quét dự phòng (observer + cuộn đã lo việc gắn nhãn)
     enrichVisible: true,    // chỉ xem tin nhắn của hội thoại đang hiển thị (để nhận ra quảng cáo)
     enrichLimit: 3,         // tối đa N hội thoại mỗi lượt (càng ít càng nhẹ)
@@ -124,13 +124,21 @@
    *   organic : ĐÃ đọc tin nhắn và không có dấu hiệu nào ở trên
    *   unknown : CHƯA đọc tin nhắn -> KHÔNG đoán (đây chính là lỗi "hiện TN, bấm vào lại thành QC")
    */
-  function classify(conv, msgs, checked) {
+  function classify(conv, msgs, checked, attr) {
     msgs = msgs || [];
+    attr = attr || null;
     const evidence = [];
     let source = null;
     let confidence = 'high';
 
-    // ---------- 1. QUẢNG CÁO ----------
+    // ---------- 0. NGUỒN CẤP HỘI THOẠI (Pancake trả trong response tin nhắn) ----------
+    if (attr && attr.ad && attr.ad.length) {
+      source = 'ads';
+      evidence.push('Pancake ghi nhận khách bấm quảng cáo · ad_id ' + (attr.adId || attr.ad[0].ad_id || '') +
+        (attr.ad[0].post_id ? ' · post_id ' + attr.ad[0].post_id : ''));
+    }
+
+    // ---------- 1. QUẢNG CÁO (theo từng tin nhắn) ----------
     const adHits = [];
     msgs.forEach((m, i) => {
       if (!m || !Array.isArray(m.attachments)) return;
@@ -177,6 +185,7 @@
     deepFind({ conv: { post: conv.post, post_id: conv.post_id } }, POST_KEYS).forEach(hit => {
       if (!isEmptyish(hit.value)) postHits.push(hit.path + ' = ' + jsonify(hit.value));
     });
+    if (attr && attr.post) postHits.unshift('hội thoại gắn với bài viết (post) — Pancake trả trong dữ liệu tin nhắn');
     if (!source && postHits.length) {
       source = 'post';
       evidence.push.apply(evidence, postHits.slice(0, 3));
@@ -184,6 +193,7 @@
 
     // ---------- 3. LIVESTREAM (chỉ khi Pancake gắn cờ) ----------
     const liveHits = [];
+    if (attr && attr.live) liveHits.push('hội thoại có cờ livestream trong dữ liệu tin nhắn');
     const liveFlag = o => o && (o.is_livestream_order === true || o.has_livestream_order === true ||
       !isEmptyish(o.live_video_id) || !isEmptyish(o.live_video_status));
     if (liveFlag(conv)) liveHits.push('hội thoại có has_livestream_order = true');
@@ -249,8 +259,8 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  function buildLead(conv, msgs, now, checked) {
-    const c = classify(conv, msgs, checked);
+  function buildLead(conv, msgs, now, checked, attr) {
+    const c = classify(conv, msgs, checked, attr);
     const cust = (conv.customers && conv.customers[0]) || {};
     const from = conv.from || {};
     const name = cust.name || from.name || '(không tên)';
@@ -276,7 +286,7 @@
       snippet: snippet,
       messageCount: nMsgs,
       unread: unread,
-      checked: !!(checked || (msgs && msgs.length)),
+      checked: !!(checked || (msgs && msgs.length) || (attr && (attr.ad.length || attr.post || attr.live))),
       updatedAt: updated ? updated.toISOString() : '',
       lastCustomerAt: lastCust ? lastCust.toISOString() : '',
       at: (updated || lastCust) ? (updated || lastCust).getTime() : 0,
@@ -297,7 +307,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.6.0';
+  const VERSION = '3.7.0';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -309,6 +319,7 @@
     listReqs: [],          // [{url, init, at}] tối đa 3
     msgUrlTpl: null,
     custIds: new Map(),      // conv_id -> customer_id (học từ URL Pancake tự gọi)
+    attr: new Map(),         // conv_id -> {ad[], post, live} lấy từ response tin nhắn
     lastSync: 0,
     version: 0,
     enriching: new Set(),
@@ -323,10 +334,14 @@
   }
 
   /** Có nên đọc response này không (không phụ thuộc đúng URL của Pancake). */
+  const RE_JUNK = /\/(avatar|logs|contents|promotion|check_|toggle_|sync_|update_global_id|profile_in|websocket)/i;
   function shouldSniff(url) {
-    if (!url || !RE_API.test(url) || RE_MESSAGES_URL.test(url)) return true;
+    if (!url || typeof url !== 'string') return false;
+    if (RE_MESSAGES_URL.test(url)) return true;
+    if (!RE_API.test(url)) return false;              // ngoài /api/v1/ thì bỏ qua (đỡ parse vô ích)
+    if (RE_JUNK.test(url)) return false;
     if (/conversation|message|tag|label/i.test(url)) return true;
-    return Date.now() - BOOT_AT < 30000;   // 30s đầu: đọc thử mọi API -> không bỏ lỡ endpoint mới
+    return Date.now() - BOOT_AT < 8000;               // 8s đầu mới dò thêm endpoint lạ
   }
 
   const RE_CONV_SHAPE = /^\d{5,}_\d{5,}$/;
@@ -371,7 +386,7 @@
     if (!Array.isArray(list)) return;
     const m = RE_MESSAGES_URL.exec(url || '');
     if (m && (list.length === 0 || (list[0] && typeof list[0] === 'object'))) {
-      ingestMessagesFor(decodeURIComponent(m[1]), list, url);
+      ingestMessagesFor(decodeURIComponent(m[1]), list, url, json);
       return;
     }
     if (!list.length || !list[0] || !list[0].conversation_id) return;
@@ -380,7 +395,7 @@
       const cid = x && x.conversation_id;
       if (cid) (byConv[cid] = byConv[cid] || []).push(x);
     });
-    Object.keys(byConv).forEach(cid => ingestMessagesFor(cid, byConv[cid], url));
+    Object.keys(byConv).forEach(cid => ingestMessagesFor(cid, byConv[cid], url, json));
   }
 
   function rememberListReq(url, init) {
@@ -419,10 +434,41 @@
     if (state.msgs.size > 400) {
       Array.from(state.msgs.keys()).slice(0, state.msgs.size - 300).forEach(k => state.msgs.delete(k));
     }
+    if (state.attr.size > 600) {
+      Array.from(state.attr.keys()).slice(0, state.attr.size - 400).forEach(k => state.attr.delete(k));
+    }
     state.lastSync = ts;
     state.version++;
     scheduleDecor();
     schedulePaint();
+  }
+
+  /**
+   * Pancake ghi nguồn ở CẤP HỘI THOẠI ngay trong response tin nhắn:
+   *   ad_clicks: {"<customer_uuid>": [{ad_id, post_id, inserted_at}]}
+   *   activities[].ad_id, customers[].ad_clicks, post, has_livestream_order…
+   * (kiểm trên 31 response thật: 27 response có ad_clicks; danh sách hội thoại thì KHÔNG có)
+   * => đọc tin nhắn 1 lần là biết QC/BV/LV, không phụ thuộc trang tin mới nhất.
+   */
+  function extractAttribution(json) {
+    const out = { ad: [], post: null, live: false, adId: '' };
+    if (!json || typeof json !== 'object') return out;
+    const ac = json.ad_clicks;
+    if (ac && typeof ac === 'object' && !Array.isArray(ac)) {
+      Object.keys(ac).forEach(k => { if (Array.isArray(ac[k])) out.ad = out.ad.concat(ac[k]); });
+    } else if (Array.isArray(ac)) out.ad = ac.slice();
+    (Array.isArray(json.activities) ? json.activities : []).forEach(a => {
+      if (a && a.ad_id) out.ad.push({ ad_id: a.ad_id, post_id: a.post_id });
+    });
+    (Array.isArray(json.customers) ? json.customers : []).forEach(c => {
+      if (c && Array.isArray(c.ad_clicks)) out.ad = out.ad.concat(c.ad_clicks);
+    });
+    if (json.post) out.post = json.post;
+    else if (json.post_id) out.post = { id: json.post_id };
+    out.live = !!(json.has_livestream_order === true || json.is_livestream_order === true ||
+      json.live_video_status || json.live_video_id);
+    out.adId = out.ad.length ? String(out.ad[0].ad_id || '') : '';
+    return out;
   }
 
   function learnCustId(id, url) {
@@ -431,12 +477,15 @@
     if (m) state.custIds.set(id, decodeURIComponent(m[1]));
   }
 
-  function ingestMessagesFor(id, list, url) {
+  function ingestMessagesFor(id, list, url, payload) {
     if (!id || !Array.isArray(list)) return;
     learnCustId(id, url);
-    // API trả rỗng nhưng hội thoại có tin -> coi như CHƯA đọc (không kết luận "tự nhắn" oan)
+    const attr = extractAttribution(payload || {});
+    if (attr.ad.length || attr.post || attr.live) state.attr.set(id, attr);
     const known = state.convs.get(id);
-    if (!list.length && known && Number(known.message_count || 0) > 0) {
+    const hasProof = attr.ad.length > 0 || !!attr.post || attr.live;
+    // rỗng mà không có bằng chứng, trong khi hội thoại có tin -> coi như CHƯA đọc
+    if (!list.length && !hasProof && known && Number(known.message_count || 0) > 0) {
       state.enriching.delete(id);
       return;
     }
@@ -489,7 +538,7 @@
   // 4. POLL + ENRICH (chỉ cho hội thoại đang hiển thị)
   // ======================================================================
   function replayList() {
-    const reqs = state.listReqs.filter(r => Date.now() - r.at < 10 * 60 * 1000).slice(-2);
+    const reqs = state.listReqs.filter(r => Date.now() - r.at < 10 * 60 * 1000).slice(-1);
     reqs.forEach(req => {
       let init;
       if (req.init && req.init.body) {
@@ -566,7 +615,7 @@
         const j = await res.json();
         const arr = (j && Array.isArray(j.messages)) ? j.messages : null;
         state.enrichDbg = { id: id, got: arr ? arr.length : 0, keys: Object.keys(j || {}).slice(0, 8), url: urls[i].slice(-70) };
-        if (arr) { ingestMessagesFor(id, arr, urls[i]); return; }
+        if (arr) { ingestMessagesFor(id, arr, urls[i], j); return; }
         lastKeys = Object.keys(j || {}).slice(0, 6).join(',');
       } catch (e) {
         state.enrichDbg = { id: id, got: 0, keys: ['lỗi: ' + e.message], url: urls[i].slice(-70) };
@@ -857,7 +906,7 @@
       else if (row.classList.contains('unread') && !conv.unread_count) conv = Object.assign({}, conv, { unread_count: 1 });
 
       const msgs = state.msgs.get(convId);
-      const checked = state.msgs.has(convId);
+      const checked = state.msgs.has(convId) || state.attr.has(convId);
       const lead = cachedLead(conv, msgs, checked, now);
       if (!checked && CFG.enrichVisible) needEnrich.push(conv);
 
@@ -903,10 +952,12 @@
     if (leadEpoch !== state.version) { leadCache.clear(); leadEpoch = state.version; }
     const key = conv.id || '';
     const unread = Number(conv.unread_count || 0) || 0;
-    const extra = unread + ':' + (checked ? (msgs ? msgs.length : 0) : -1) + ':' + (conv._fromDom ? 'd' : 'a');
+    const attr = state.attr.get(key);
+    const aSig = attr ? (attr.ad.length ? 'A' + attr.adId : (attr.post ? 'P' : (attr.live ? 'L' : '-'))) : '-';
+    const extra = unread + ':' + (checked ? (msgs ? msgs.length : 0) : -1) + ':' + (conv._fromDom ? 'd' : 'a') + ':' + aSig;
     const hit = leadCache.get(key);
     if (hit && hit.extra === extra) return hit.lead;
-    const lead = buildLead(conv, msgs || [], now, checked);
+    const lead = buildLead(conv, msgs || [], now, checked, attr);
     lead.sig = lead.source + '|' + lead.confidence + '|' + lead.evidence.length + '|' + unread;
     if (leadCache.size > 3000) leadCache.clear();
     leadCache.set(key, { extra: extra, lead: lead });
@@ -1200,7 +1251,7 @@
     if (!id) return;
     const conv = state.convs.get(id) || { id: id };
     if (act === 'copy') {
-      const lead = buildLead(conv, state.msgs.get(id) || [], Date.now());
+      const lead = buildLead(conv, state.msgs.get(id) || [], Date.now(), state.msgs.has(id), state.attr.get(id));
       navigator.clipboard.writeText(lead.name + ' | psid ' + lead.psid + ' | ' + lead.sourceLabel + ' | ' +
         lead.sourceLabel + ' | ' + lead.evidence.slice(0, 2).join(' ; ') + ' | ' + lead.snippet.replace(/\n/g, ' '))
         .then(() => { btn.textContent = '✅'; setTimeout(() => { btn.textContent = '📋'; }, 1200); })
@@ -1385,7 +1436,7 @@
     get visible() { return !!CFG.enabled; },
     get leads() {
       const now = Date.now(), out = [];
-      state.convs.forEach((c, id) => out.push(buildLead(c, state.msgs.get(id) || [], now, state.msgs.has(id))));
+      state.convs.forEach((c, id) => out.push(cachedLead(c, state.msgs.get(id), state.msgs.has(id) || state.attr.has(id), now)));
       return out.sort(sortLeads);
     },
     get visibleRows() { return visibleRows().map(convIdOf).filter(Boolean); },

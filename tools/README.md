@@ -292,3 +292,37 @@ Nếu vẫn `?`, xem `__leadSource.debug().enrichLast.keys` — nó cho biết P
 | `__leadSource.set({enabled:false})` | đóng | tắt, dừng hẳn script |
 
 Nói ngắn: đóng bảng không bao giờ làm mất nhãn. Chỉ nút 🏷️ Nhãn mới tắt nhãn.
+
+### 🎯 Vì sao "TN rồi kéo tin lên lại thành QC" — và cách sửa đúng (3.7.0)
+
+`ad_click` nằm ở **tin đầu tiên** của hội thoại (khách bấm quảng cáo rồi mới nhắn), còn
+script chỉ tải **trang tin mới nhất**. Vì vậy bản cũ không thấy `ad_click` → gắn TN; khi bạn
+kéo lên, Pancake tải tin cũ → thấy `ad_click` → đổi thành QC.
+
+Dữ liệu thật cho thấy Pancake còn trả **nguồn ở cấp hội thoại** ngay trong response tin nhắn:
+
+```json
+{ "messages": [...],
+  "ad_clicks": { "<customer_uuid>": [{ "ad_id": "1202…", "post_id": "…", "inserted_at": "…" }] },
+  "activities": [{ "ad_id": "1202…" }],
+  "post": null }
+```
+
+- 27/31 response tin nhắn có `ad_clicks`
+- có response chỉ 2 tin, **không có `ad_click`** trong tin nào nhưng `ad_clicks` vẫn có
+- danh sách hội thoại thì **không** có field này (0/1177)
+
+Từ 3.7.0, script đọc `ad_clicks` / `activities[].ad_id` / `customers[].ad_clicks` / `post` /
+cờ livestream **ngay khi tải tin nhắn**, nên QC/BV quyết ngay lần đầu — không phụ thuộc
+trang tin mới nhất, không cần cuộn lên.
+
+### ⚡ Giảm tải trang (3.7.0)
+
+| Việc | Trước | Sau |
+|---|---|---|
+| Dò response lạ trong lúc tải trang | 30 giây | **8 giây** |
+| Parse response không liên quan (avatar, logs, pos-api, contents…) | có | **bỏ** |
+| Gọi lại danh sách | 2 request / 25 giây | **1 request / 45 giây** |
+| Bộ nhớ đệm nguồn | — | giới hạn 600 hội thoại |
+
+Đo trên fixture DOM thật 31 dòng: nhãn đầu tiên sau **~0,55 giây**, mỗi lượt gắn nhãn **3–5 ms**.
