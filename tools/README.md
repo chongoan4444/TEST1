@@ -1,3 +1,11 @@
+## Radar 2.6.0 — đường Phoenix trực tiếp, đèn 32 px
+
+- Nhận diện khung Phoenix JSON 5 phần tử ngay đầu đường nhận; truyền đối tượng đã parse xuống handler thay vì dò định dạng Facebook cũ rồi parse lại. Định dạng legacy vẫn giữ bộ dò cũ.
+- WeakSet theo chính MessageEvent tránh xử lý hai lần do listener và onmessage cùng nhận một sự kiện. Không gộp hai MessageEvent khác nhau, không chặn listener ứng dụng.
+- Sau khi bật tín hiệu đèn, dựng bảng/nhật ký được gộp bằng một setTimeout 0; giảm việc dựng bảng trong callback socket. Đây không phải cam kết browser paint trước React; server/network vẫn là giới hạn.
+- Đèn tăng 24 → 32 px, viền 3 px và quầng sáng rõ hơn. Giữ kéo thả, nhớ vị trí, nháy xanh cho tin đã xác nhận chưa gắn thẻ. Không tăng nhịp API.
+- Kiểm thử fake socket nay gửi cùng MessageEvent qua cả listener/onmessage giống trình duyệt; kiểm tra đúng một lượt xử lý, bộ đếm đường trực tiếp, kích thước đèn và các ca hồi quy. Mock và 19 ca DOM/API thật đạt.
+
 ## Radar 2.5.1 — đèn nhỏ 24 px
 
 Thu đèn 46 → 24 px, viền 2 px, ẩn số đếm trên đèn cho gọn. Giữ kéo thả, lưu vị trí và nháy xanh. Giới hạn viewport theo kích thước mới. Không thay đổi đường nhận tin; chưa có bằng chứng cải thiện độ trễ từ server/DOM.

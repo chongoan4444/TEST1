@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.5.1
+// @version      2.6.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.5.1';
+  const VERSION = '2.6.0';
 
   const DEFAULTS = {
     on: true,
@@ -96,7 +96,7 @@
   function logEvent(tag, text) {
     state.log.unshift({ t: Date.now(), tag: tag, text: String(text == null ? '' : text).slice(0, 160) });
     if (state.log.length > 40) state.log.length = 40;
-    if (state.diagOpen) render();
+    if (state.diagOpen) scheduleRender();
   }
 
   const LOG = (...a) => { try { console.log('%c[radar]', 'color:#0ea5e9;font-weight:600', ...a); } catch (e) { /* ignore */ } };
@@ -233,6 +233,17 @@
     } catch (e) { /* ignore */ }
 
     const pageId = pageIdNow();
+    // Phoenix thực tế: parse một lần, đi thẳng vào handler, không dò regex Facebook trước.
+    if (raw.trimStart().charAt(0) === '[') {
+      let phoenix;
+      try { phoenix = JSON.parse(raw); } catch (e) { /* khung legacy/escape: dùng bộ dò cũ */ }
+      if (Array.isArray(phoenix) && phoenix.length === 5 &&
+          typeof phoenix[2] === 'string' && typeof phoenix[3] === 'string') {
+        state.diag.phoenixFast = (state.diag.phoenixFast || 0) + 1;
+        parseJsonFrame(raw, pageId, phoenix);
+        return;
+      }
+    }
     let hit = parseMessageFrame(raw, pageId);
     if (hit) state.diag.msgFrames++;
     else { hit = parseThreadFrame(raw, pageId); if (hit) state.diag.threadFrames++; }
@@ -253,11 +264,11 @@
    * Khung Phoenix v2: [join_ref, ref, topic, event, payload] (mảng JSON 5 phần tử).
    * Không đoán tên event — đọc mọi payload rồi tự tìm đối tượng giống hội thoại / tin nhắn.
    */
-  function parseJsonFrame(text, pageId) {
+  function parseJsonFrame(text, pageId, decoded) {
     const t = String(text || '').trim();
     if (!t || (t.charAt(0) !== '[' && t.charAt(0) !== '{')) return;
-    let j;
-    try { j = JSON.parse(t); } catch (e) { return; }
+    let j = decoded;
+    if (!j) { try { j = JSON.parse(t); } catch (e) { return; } }
     state.diag.jsonFrames++;
     if (Array.isArray(j) && j.length >= 5 && typeof j[2] === 'string' && typeof j[3] === 'string') {
       const topic = j[2], event = j[3], payload = j[4];
@@ -441,7 +452,12 @@
       const Orig = window.WebSocket;
       if (typeof Orig !== 'function') { state.diag.hookErr = 'không có WebSocket'; return; }
       if (Orig.__radarHook) { state.diag.hook = true; return; }
-      const onMsg = ev => { if (ev && ev.data) readWsData(ev.data); };
+      const handled = new WeakSet();
+      const onMsg = ev => {
+        if (!ev || !ev.data || handled.has(ev)) return;
+        handled.add(ev); // addEventListener + onmessage có thể cùng nhận chính một MessageEvent
+        readWsData(ev.data);
+      };
       const Wrapped = new Proxy(Orig, {
         construct(target, args, newTarget) {
           const ws = Reflect.construct(target, args, newTarget === Wrapped ? target : newTarget);
@@ -1087,7 +1103,7 @@
     measureAlert(item);
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
-    render();
+    scheduleRender();
     logEvent('📥', (item.name || hit.psid) + ' · ' + item.snippet.slice(0, 70));
     notify(item);
     LOG('tin tới:', item.name || hit.psid, '·', item.snippet.slice(0, 50), '·', via, '· vị trí', pos.pos || 'mới');
@@ -1103,9 +1119,9 @@
   // 6. BẢNG
   // ======================================================================
   const CSS = `
-  .__rd_fab{position:fixed;right:16px;bottom:96px;z-index:2147483000;width:24px;height:24px;border-radius:50%;
+  .__rd_fab{position:fixed;right:16px;bottom:96px;z-index:2147483000;width:32px;height:32px;border-radius:50%;
     background:#0ea5e9;color:#fff;border:0;cursor:pointer;box-shadow:0 4px 14px rgba(14,165,233,.45);font-size:20px}
-  .__rd_fab{background:#b91c1c!important;border:2px solid #fecaca!important;box-shadow:0 0 12px #ef444466;touch-action:none;cursor:grab}
+  .__rd_fab{background:#b91c1c!important;border:3px solid #fecaca!important;box-shadow:0 0 5px #fff9,0 0 12px #ef444499;touch-action:none;cursor:grab}
   .__rd_fab:active{cursor:grabbing}
   .__rd_fab .n{display:none!important}
   .__rd_fab.signal{background:#16a34a!important;border-color:#bbf7d0!important;animation:__rd_lamp .35s steps(2,end) infinite}
@@ -1162,8 +1178,8 @@
 
   function placeLamp() {
     if (!state.fab || !CFG.lampPos) return;
-    const x = Math.max(0, Math.min(Number(CFG.lampPos.x) || 0, Math.max(0, window.innerWidth - 24)));
-    const y = Math.max(0, Math.min(Number(CFG.lampPos.y) || 0, Math.max(0, window.innerHeight - 24)));
+    const x = Math.max(0, Math.min(Number(CFG.lampPos.x) || 0, Math.max(0, window.innerWidth - 32)));
+    const y = Math.max(0, Math.min(Number(CFG.lampPos.y) || 0, Math.max(0, window.innerHeight - 32)));
     Object.assign(state.fab.style, {left:x + 'px', top:y + 'px', right:'auto', bottom:'auto'});
   }
 
@@ -1204,6 +1220,14 @@
     };
     b.addEventListener('pointerup', end);
     b.addEventListener('pointercancel', end);
+  }
+
+  function scheduleRender() {
+    if (state.renderTimer) return;
+    state.renderTimer = setTimeout(() => {
+      state.renderTimer = 0;
+      render();
+    }, 0);
   }
 
   function render() {
@@ -1370,6 +1394,7 @@
       'chưa gắn tag: hỏi ' + (d.untaggedPolls || 0) + ' lần · lỗi ' + (d.untaggedErr || 0) + ' · ' + (d.untaggedConvs || 0) + ' hội thoại chưa gắn tag đã thấy',
       'đo từng tin (DOM, không phải thời điểm paint): ' + JSON.stringify(state.items.slice(0, 8).map(it => ({convId: it.convId, status: it.timingStatus, socketToAlertMs: it.patchToAlertMs, leadMs: it.leadMs}))),
       'lọc chỉ chưa gắn thẻ: ' + (CFG.onlyUntagged ? 'bật' : 'tắt') + ' · bỏ có thẻ/chưa rõ thẻ: ' + (d.skippedTagged || 0),
+      'đường Phoenix trực tiếp: ' + (d.phoenixFast || 0) + ' khung',
       'socket đủ dữ liệu, không gọi lại: ' + (d.socketComplete || 0) + ' · có thẻ bỏ xác minh: ' + (d.socketTaggedNoFetch || 0) + ' · khung thiếu cần xác minh: ' + (d.socketVerify || 0),
       'khung cập nhật hội thoại: ' + (d.convPatches || 0) + ' · có người gửi: ' + (d.patchWithSender || 0) + ' · có nội dung: ' + (d.patchWithSnippet || 0),
       'khoá trong khung gần nhất: ' + (d.patchKeys || '—'),

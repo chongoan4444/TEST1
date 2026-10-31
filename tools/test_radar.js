@@ -54,7 +54,7 @@ window.WebSocket = class FakeWS {
   constructor(url) { this.url = url; this._l = []; }
   addEventListener(t, f) { this._l.push([t, f]); }
   removeEventListener(t, f) { this._l = this._l.filter(x => x[1] !== f); }
-  dispatch(kind, data) { this._l.slice().forEach(x => { if (x[0] === kind) x[1]({ data: data }); }); }
+  dispatch(kind, data) { const ev = {data}; this._l.slice().forEach(x => { if (x[0] === kind) x[1](ev); }); if (kind === 'message' && this.onmessage) this.onmessage(ev); }
   send() {} close() {}
 };
 window.__listCalls = 0;
@@ -554,6 +554,14 @@ const diag = () => window.__radar.debug().diag;
   const panelBeforeDragClick = window.__radar.cfg.panel;
   lamp.click();
   check(window.__radar.cfg.panel === panelBeforeDragClick, 'kéo xong không vô tình mở/đóng bảng');
+
+  // ---- 24. đường nhanh Phoenix và chống xử lý đôi MessageEvent
+  const framesBeforeFast = diag().frames;
+  const fastBefore = diag().phoenixFast || 0;
+  ws2.dispatch('message', JSON.stringify([null, null, 'multiple_pages:test', 'online_status', {}]));
+  check(diag().frames === framesBeforeFast + 1, 'listener + onmessage cùng sự kiện -> xử lý đúng một lần');
+  check(diag().phoenixFast === fastBefore + 1, 'Phoenix đi qua đường trực tiếp');
+  check(doc.getElementById('__rd_style').textContent.includes('width:32px;height:32px'), 'đèn tăng lên 32px');
 
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
