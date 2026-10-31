@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.6.0
+// @version      1.7.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.6.0';
+  const VERSION = '1.7.0';
 
   const DEFAULTS = {
     on: true,
@@ -44,7 +44,8 @@
     pollMinGap: 1200,        // không gọi lại dày hơn mức này
     domTrigger: true,        // dòng trên màn hình vừa đổi -> gọi lại danh sách NGAY (lấy chiều tin)
     watchList: true,         // dự phòng bằng API danh sách (chiều chính xác)
-    watchDom: false          // theo dõi giao diện: KHÔNG biết chiều -> mặc định tắt
+    watchDom: false,         // theo dõi giao diện: KHÔNG biết chiều -> mặc định tắt
+    defaultPoll: true        // nếu chưa học được request danh sách nào thì tự dựng request (đúng dạng trong HAR)
   };
 
   const CFG = (function () {
@@ -77,7 +78,7 @@
     log: [],
     diag: {
       hook: false, hookErr: '', sockets: [], frames: 0, listReq: 0, polls: 0, lastPollAt: 0, bodyReady: false,
-      pageTriggers: 0, pagePolls: 0, pageFail: 0,
+      pageTriggers: 0, pagePolls: 0, pageFail: 0, xhrHits: 0, defaultPolls: 0,
       msgFrames: 0, threadFrames: 0, parsed: 0,
       skippedOut: 0, skippedUnknown: 0, lastFrameAt: 0, lastErr: '', lastSender: ''
     }
@@ -364,7 +365,7 @@
     const now = Date.now();
     if (now - (state.pagePollAt[pageId] || 0) < 3000) return;
     state.pagePollAt[pageId] = now;
-    const url = '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations?current_count=20&unread_first=true&mode=OR';
+    const url = '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations?current_count=40&unread_first=true&mode=OR&except_tags=[]&from_platform=web';
     state.diag.pagePolls++;
     state.internal = true;
     let pr;
@@ -390,9 +391,21 @@
       .catch(err => { state.pagePollFail++; state.diag.pageFail++; logEvent('⚠️', 'gọi trang lỗi: ' + err.message); });
   }
 
+  /** lưu request danh sách học được (từ fetch HOẶC từ XMLHttpRequest của ứng dụng) */
+  function saveListReq(rec) {
+    if (!rec || !rec.url) return;
+    if (/\/messages/.test(String(rec.url))) return;
+    if (!rec.method) rec.method = 'POST';
+    rec.at = Date.now();
+    rec.lastPoll = 0;
+    state.listReq = rec;
+    state.diag.listReq = (state.diag.listReq || 0) + 1;
+    try { render(); } catch (e) { /* ignore */ }
+  }
+
   function captureListReq(url, method, init, input) {
     const rec = {
-      url: url,
+      url: String(url || ''),
       method: String(method || 'GET').toUpperCase(),
       headers: (init && init.headers) || null,
       body: null,
@@ -414,9 +427,7 @@
         else c.text().then(t => { rec.body = t; state.diag.bodyReady = true; }).catch(() => {});
       }
     } catch (e) { state.diag.lastErr = 'capture: ' + e.message; }
-    state.listReq = rec;
-    state.diag.listReq = (state.diag.listReq || 0) + 1;
-    render();
+    saveListReq(rec);
   }
 
   const _fetch = window.fetch;
@@ -424,7 +435,9 @@
     window.fetch = function (input, init) {
       const url = typeof input === 'string' ? input : ((input && input.url) || '');
       let method = (init && init.method) || (input && input.method) || 'GET';
-      try { if (!state.internal && isListUrl(url)) captureListReq(url, method, init, input); } catch (e) { /* ignore */ }
+      let mine = false;
+      try { mine = state.internal; } catch (e) { /* ignore */ }
+      try { if (!mine && isListUrl(url)) captureListReq(url, method, init, input); } catch (e) { /* ignore */ }
       const p = _fetch.apply(this, arguments);
       try {
         if (isListUrl(url)) {
@@ -435,17 +448,85 @@
     };
   }
 
-  const _open = XMLHttpRequest.prototype.open;
-  const _send = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (m, url) { this.__rdUrl = url; return _open.apply(this, arguments); };
-  XMLHttpRequest.prototype.send = function () {
-    const xhr = this;
-    if (isListUrl(xhr.__rdUrl)) {
-      try { state.listReq = { url: xhr.__rdUrl, init: null }; } catch (e) { /* ignore */ }
-      xhr.addEventListener('load', function () { try { ingestList(JSON.parse(xhr.responseText)); } catch (e) { /* ignore */ } });
+  /**
+   * ỨNG DỤNG DÙNG XMLHttpRequest, KHÔNG PHẢI fetch.
+   * Bằng chứng: tinnhanmoi.har ghi `_resourceType: "xhr"` cho POST /api/v1/conversations,
+   * trang nạp chunk `vendor-axios-*.js` (axios mặc định dùng XHR).
+   * Bản 1.6.0 chỉ bắt được XMLHttpRequest ở mức "biết url" nên khi gọi lại đã mất method + body
+   * (POST thành GET, không có body) -> request hỏng, không có tin nào được báo.
+   */
+  if (typeof XMLHttpRequest === 'function' && XMLHttpRequest.prototype) {
+    const _xopen = XMLHttpRequest.prototype.open;
+    const _xsend = XMLHttpRequest.prototype.send;
+    const _xset = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.open = function (m, url) {
+      try { this.__rdUrl = url; this.__rdMethod = m; this.__rdHeaders = {}; this.__rdDone = false; } catch (e) { /* ignore */ }
+      return _xopen.apply(this, arguments);
+    };
+    if (typeof _xset === 'function') {
+      XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+        try { if (this.__rdHeaders) this.__rdHeaders[String(k)] = String(v); } catch (e) { /* ignore */ }
+        return _xset.apply(this, arguments);
+      };
     }
-    return _send.apply(this, arguments);
-  };
+    XMLHttpRequest.prototype.send = function (body) {
+      const xhr = this;
+      try {
+        if (isListUrl(xhr.__rdUrl)) {
+          state.diag.xhrHits = (state.diag.xhrHits || 0) + 1;
+          if (!state.internal) {
+            saveListReq({
+              url: String(xhr.__rdUrl),
+              method: String(xhr.__rdMethod || 'GET').toUpperCase(),
+              headers: xhr.__rdHeaders || null,
+              body: (body != null ? body : null),
+              fromXhr: true
+            });
+          }
+          const read = () => {
+            if (xhr.__rdDone) return;
+            xhr.__rdDone = true;
+            try { if (xhr.responseText) ingestList(JSON.parse(xhr.responseText)); } catch (e) { /* ignore */ }
+          };
+          try { xhr.addEventListener('load', read); } catch (e) { /* ignore */ }
+          try { xhr.addEventListener('readystatechange', function () { if (this.readyState === 4) read(); }); } catch (e) { /* ignore */ }
+        }
+      } catch (e) { /* ignore */ }
+      return _xsend.apply(this, arguments);
+    };
+  }
+
+  /** body chuẩn của request danh sách (đúng như postData trong tinnhanmoi.har: type=ALL,UNREAD) */
+  function unreadBody() {
+    try {
+      const fd = new FormData();
+      fd.append('type', 'ALL,UNREAD');
+      return fd;
+    } catch (e) { return 'type=ALL%2CUNREAD'; }
+  }
+
+  /** tự dựng request danh sách khi CHƯA học được request nào của ứng dụng */
+  function buildDefaultReq() {
+    const pages = [];
+    const add = id => { const x = String(id || ''); if (/^\d{5,}$/.test(x) && pages.indexOf(x) < 0) pages.push(x); };
+    add(pageIdNow());
+    Array.from(state.convs.keys()).forEach(k => add(String(k).split('_')[0]));
+    rows().forEach(el => add(String(convIdOfRow(el)).split('_')[0]));
+    if (!pages.length) return null;
+    const key = pages.join(',');
+    if (state.defaultReq && state.defaultReq.key === key) return state.defaultReq;
+    const q = pages.map(id => 'pages[' + id + ']=0').join('&');
+    state.defaultReq = {
+      key: key,
+      url: '/api/v1/conversations?' + q + '&unread_first=true&mode=OR',
+      method: 'POST',
+      headers: null,
+      body: unreadBody(),
+      lastPoll: 0,
+      own: true
+    };
+    return state.defaultReq;
+  }
 
   /** bỏ content-type khi gửi lại FormData (boundary do trình duyệt tự sinh) */
   function safeHeaders(h, body) {
@@ -468,22 +549,68 @@
     return h;
   }
 
-  function pollList(force) {
-    const r = state.listReq;
-    if (!CFG.on || !CFG.watchList || !r) return;
+  /**
+   * Chọn request để gọi lại:
+   *  • request của ứng dụng (ưu tiên — chắc chắn hợp lệ với phiên đăng nhập), trừ khi nó là
+   *    request "trang kế tiếp" (có next_cursor) vì gọi lại chỉ nhận đúng trang đó;
+   *  • nếu đã 2 lần lỗi HTTP thì chuyển sang request tự dựng;
+   *  • nếu chưa học được gì và biết page id từ URL/DOM thì tự dựng.
+   */
+  function pickReq() {
+    if (!CFG.defaultPoll) return state.listReq || null;
+    const usable = x => x && !/next_cursor=/.test(String(x.url));
+    if (state.preferDefault) {
+      const d0 = buildDefaultReq();
+      if (d0) return d0;
+    }
+    if (usable(state.listReq)) return state.listReq;
+    const d = buildDefaultReq();
+    return d || state.listReq || null;
+  }
+
+  function pollList(force, urgent) {
+    if (!CFG.on || !CFG.watchList) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    const gap = force ? Math.max(600, Number(CFG.pollMinGap) || 1200) : Math.max(1000, Number(CFG.pollMs) || 2000);
+    const r = pickReq();
+    if (!r) return;
+    if (r.own) {
+      state.diag.defaultPolls = (state.diag.defaultPolls || 0) + 1;
+      if (state.diag.defaultPolls === 1) logEvent('🛠', 'dùng request tự dựng cho trang hiện tại');
+    }
+    // urgent = dòng vừa đổi trên màn hình: gần như gọi ngay, không để bị chặn bởi nhịp quét
+    const gap = urgent ? 250
+      : (force ? Math.max(600, Number(CFG.pollMinGap) || 1200) : Math.max(1000, Number(CFG.pollMs) || 2000));
     if (Date.now() - (r.lastPoll || 0) < gap) return;
     r.lastPoll = Date.now();
-    const opt = { method: r.method, credentials: 'include' };
+    const method = String(r.method || 'POST').toUpperCase();
+    const opt = { method: method, credentials: 'include' };
     const h = safeHeaders(r.headers, r.body);
     if (h) opt.headers = h;
-    if (r.body != null) opt.body = r.body;
+    let body = r.body;
+    if (method !== 'GET' && method !== 'HEAD' && (body == null || body === '')) body = unreadBody();
+    if (body != null && method !== 'GET' && method !== 'HEAD') opt.body = body;
+    const prevInternal = state.internal;
+    state.internal = true;                 // request của chính mình: không ghi đè request đã học
     try {
-      fetch(r.url, opt)
-        .then(() => { state.diag.lastPollAt = Date.now(); state.diag.polls = (state.diag.polls || 0) + 1; })
-        .catch(err => logEvent('⚠️', 'gọi danh sách lỗi: ' + err.message));
-    } catch (e) { logEvent('⚠️', 'gọi danh sách lỗi: ' + e.message); }
+      const pr = fetch(r.url, opt);
+      state.diag.lastPollAt = Date.now();
+      state.diag.polls = (state.diag.polls || 0) + 1;
+      Promise.resolve(pr).then(res => {
+        if (res && res.ok === false) {
+          state.reqFail = (state.reqFail || 0) + 1;
+          logEvent('⚠️', 'danh sách HTTP ' + res.status + ' (' + method + ')');
+          if (state.reqFail >= 2 && !state.preferDefault) {
+            state.preferDefault = true;
+            state.reqFail = 0;
+            logEvent('🛠', 'request của ứng dụng trả lỗi -> chuyển sang request tự dựng');
+          }
+        }
+      }).catch(err => logEvent('⚠️', 'gọi danh sách lỗi: ' + err.message));
+    } catch (e) {
+      logEvent('⚠️', 'gọi danh sách lỗi: ' + e.message);
+    } finally {
+      state.internal = prevInternal;
+    }
   }
 
   // ======================================================================
@@ -536,7 +663,7 @@
         if (CFG.domTrigger) {
           state.lastChangeAt = Date.now();
           if (state.__pollTimer) clearTimeout(state.__pollTimer);
-          state.__pollTimer = setTimeout(() => { state.__pollTimer = 0; pollList(true); }, 150);
+          state.__pollTimer = setTimeout(() => { state.__pollTimer = 0; pollList(true, true); }, 150);
         }
         if (!CFG.watchDom) continue;   // không tự báo vì giao diện không cho biết chiều
         const outPrefix = /^Bạn\s*:|^Bạn\s+đã\s+|^You\s*:/i.test(snip);
@@ -639,6 +766,7 @@
   .__rd_panel.off{display:none}
   .__rd_head{padding:10px 12px 8px;background:#0b1220;border-radius:14px 14px 0 0}
   .__rd_hrow{display:flex;align-items:center;gap:6px}
+  .__rd_ver{font-size:10px;color:#8a94a6;border:1px solid #d7dce5;border-radius:6px;padding:0 4px}
   .__rd_head b{font-size:13px}
   .__rd_head .sp{flex:1}
   .__rd_head button{background:#1e293b;color:#cbd5e1;border:1px solid #334155;border-radius:8px;cursor:pointer;
@@ -682,6 +810,11 @@
     if (!document.body) return;
     style();
 
+    // Giao diện có thể bị dựng lại (SPA điều hướng): nếu nút/bảng cũ đã bị gỡ khỏi DOM thì tạo lại,
+    // tránh trường hợp "script chạy mà không thấy gì trên màn hình".
+    if (state.fab && !document.body.contains(state.fab)) { state.fab = null; }
+    if (state.panel && !document.body.contains(state.panel)) { state.panel = null; }
+
     if (!state.fab) {
       const b = document.createElement('button');
       b.className = '__rd_fab';
@@ -709,14 +842,17 @@
     p.classList.toggle('off', !CFG.panel);
 
     const d = state.diag;
+    const srcName = state.listReq
+      ? ((state.listReq.fromXhr ? 'XHR' : 'fetch') + ' ' + (state.listReq.method || '?'))
+      : (d.defaultPolls ? 'tự dựng POST' : 'chưa có');
     const lastAt = d.lastPollAt || (state.listReq && state.listReq.at) || 0;
     const stat = (d.hook ? 'WS ' + d.sockets.length + ' socket · ' + d.msgFrames + ' tin' : 'WS chưa treo được hook') +
       ' · DS ' + state.listHits + ' lần' + (lastAt ? ' (' + timeStr(lastAt) + ')' : '') +
       ' · bỏ ' + d.skippedOut + ' tin shop' + (d.skippedUnknown ? ' · ' + d.skippedUnknown + ' chưa rõ chiều' : '') +
-      ' · Tên ' + state.people.size;
+      ' · Tên ' + state.people.size + ' · nguồn ' + srcName;
 
     const head = '<div class="__rd_head">' +
-      '<div class="__rd_hrow"><b>📨 Tin khách gửi tới</b><span class="sp"></span>' +
+      '<div class="__rd_hrow"><b>📨 Tin khách gửi tới</b><span class="__rd_ver">v' + VERSION + '</span><span class="sp"></span>' +
       '<button data-a="in" class="' + (CFG.onlyIncoming ? 'on' : '') + '" title="Chỉ báo tin của khách">chỉ tin tới</button>' +
       '<button data-a="notify" class="' + (CFG.notify ? 'on' : '') + '" title="Thông báo hệ thống">🔔</button>' +
       '<button data-a="test" title="Bắn một tin thử">🧪</button>' +
@@ -798,6 +934,8 @@
       'trang có tin mới: ' + d.pageTriggers + ' · gọi riêng trang: ' + d.pagePolls + ' (lỗi ' + d.pageFail + ')',
       'dòng trong danh sách: ' + rows().length,
       'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
+      'nguồn request: ' + (state.listReq ? ((state.listReq.fromXhr ? 'XMLHttpRequest' : 'fetch') + ' ' + state.listReq.method + ' — ' + String(state.listReq.url).slice(0, 100)) : 'chưa học được (sẽ tự dựng)'),
+      'XHR thấy: ' + (d.xhrHits || 0) + ' · body học được: ' + (state.listReq && state.listReq.body != null ? 'có' : 'chưa') + ' · tự dựng: ' + (d.defaultPolls || 0),
       'lỗi gần nhất: ' + (d.lastErr || '—'),
       '',
       'NHẬT KÝ (mới nhất ở trên):',
@@ -839,10 +977,11 @@
     scan: () => { scanDom(); render(); return state.domHits; },
     /** gọi lại danh sách ngay (dùng cho kiểm thử / khi cần làm mới) */
     poll: () => {
-      if (!state.listReq) return null;
-      state.listReq.lastPoll = 0;
+      const r0 = state.listReq || state.defaultReq;
+      if (r0) r0.lastPoll = 0;
       pollList(true);
-      return { url: state.listReq.url, method: state.listReq.method, hasBody: state.listReq.body != null };
+      const r = state.listReq || state.defaultReq;
+      return r ? { url: r.url, method: r.method, hasBody: r.body != null } : null;
     },
     feed(b64) { try { readWsData(typeof b64 === 'string' ? atob(b64) : b64); } catch (e) { state.diag.lastErr = 'feed: ' + e.message; return false; } return true; },
     help() {
@@ -861,11 +1000,20 @@
     else go();
     window.addEventListener('load', go);
 
+    setTimeout(() => {
+      try {
+        const r = state.listReq;
+        logEvent('🚀', 'radar v' + VERSION + ' đang chạy · ' +
+          (r ? 'đã học request ' + (r.fromXhr ? 'XHR' : 'fetch') + ' ' + r.method : 'chưa học request danh sách (sẽ tự dựng)') +
+          ' · dòng trên màn hình: ' + rows().length);
+      } catch (e) { /* ignore */ }
+    }, 3000);
+
     setInterval(() => { if (CFG.on) pollList(); }, Math.max(1000, Number(CFG.pollMs) || 2000));
     setInterval(() => {
       if (!CFG.on) return;
       try { if (CFG.watchDom || CFG.domTrigger) scanDom(); } catch (e) { /* ignore */ }
-      if (state.items.length) render();
+      try { render(); } catch (e) { /* ignore */ }
     }, 4000);
   })();
 })();

@@ -358,7 +358,59 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.6.0** (không sót tin + không chậm).
+Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.7.0** (không sót tin + không chậm + chạy được với ứng dụng thật).
+
+### Vì sao 1.6.0 vẫn “không hoạt động” — bằng chứng trong repo
+
+Đây là lỗi nặng nhất và đã tìm ra bằng dữ liệu, không đoán:
+
+| Bằng chứng | Nơi đọc được | Nghĩa là |
+|---|---|---|
+| `POST /api/v1/conversations` có `_resourceType: "xhr"` | `tinnhanmoi.har` (entry #5) | ứng dụng gọi bằng **XMLHttpRequest**, không phải `fetch()` |
+| trang nạp chunk `vendor-axios-*.js` | `html.txt`, `html2.txt`, `html3.txt`, `html comment list` | axios mặc định dùng XHR |
+| tab Network của Chrome ghi XHR cho axios | cùng entry trên | hook `window.fetch` **không bao giờ chạy** |
+
+Bản 1.6.0 có bắt `XMLHttpRequest` nhưng chỉ lưu **url**:
+
+```js
+state.listReq = { url: xhr.__rdUrl, init: null };   // mất method + body
+```
+
+⇒ Khi tự gọi lại: `pollList` đọc `r.method` = `undefined` → `fetch` mặc định **GET**, không body.
+Endpoint là **POST multipart/form-data** ⇒ request hỏng, không có dữ liệu, và vì HAR
+`tinnhanmoi.har` có **0** khung `insertMessage` nên radar **không báo được tin nào** — đúng hiện tượng “không hoạt động”.
+
+### 1.7.0 sửa gì
+
+1. **Bắt đầy đủ XMLHttpRequest**: `open` (method + url), `setRequestHeader` (headers), `send` (body),
+   và đọc `responseText` ở `load`/`readystatechange` → mọi response danh sách của ứng dụng được nạp vào radar
+   **miễn phí, không cần request thêm**.
+2. **Gọi lại đúng method + body**: POST giữ POST; nếu body không lấy được thì tự tạo
+   `FormData { type: "ALL,UNREAD" }` (đúng `postData` trong HAR) và bỏ header `content-type` để trình duyệt tự sinh boundary.
+3. **Không gọi lại request “trang kế tiếp”**: request có `next_cursor` bị bỏ qua (gọi lại chỉ nhận đúng trang đó)
+   và chuyển sang request tự dựng.
+4. **Tự dựng request khi chưa học được gì**: page id lấy từ URL `/pages/<id>`, từ hội thoại đã biết và từ DOM →
+   `POST /api/v1/conversations?pages[<id>]=0&unread_first=true&mode=OR`. Nhờ vậy radar vẫn chạy dù chưa bắt được request nào.
+5. **Tự chuyển nguồn khi lỗi**: request của ứng dụng trả HTTP ≥ 400 hai lần → chuyển sang request tự dựng.
+6. **Kích hoạt theo giao diện không bị chặn nhịp**: dòng vừa đổi → gọi lại sau 150 ms với ngưỡng riêng 250 ms
+   (trước đây bị chặn bởi `pollMinGap` 1200 ms nên tin hiện ra rồi mới báo).
+7. **Tự gắn lại giao diện**: nếu SPA dựng lại `body` làm nút 📨/bảng bị gỡ, vòng 4 giây sẽ tạo lại.
+8. **Nhìn là biết đang chạy**: tiêu đề có `v1.7.0`, dòng trạng thái có `nguồn XHR POST`, 🔍 có
+   `nguồn request: XMLHttpRequest POST — <url>`, `XHR thấy: N`, và nhật ký có `🚀 radar v1.7.0 đang chạy …`.
+
+### Cách kiểm tra trong 30 giây (trong trình duyệt)
+
+1. Cài lại file `userscripts/pancake-new-message-radar.user.js` (bản cũ không tự cập nhật).
+2. Mở Pancake, nhìn góc màn hình: nút 📨 và bảng phải có chữ **v1.7.0**.
+3. Bấm 🔍, đọc 3 dòng:
+   - `nguồn request: XMLHttpRequest POST — /api/v1/conversations?pages[…]` ⇒ đã bắt được request thật;
+   - `XHR thấy: N` với N > 0;
+   - `request danh sách: N lần · tự gọi lại: M lần · lần cuối: HH:MM:SS` với M tăng đều.
+4. Bấm 🧪 → phải hiện ngay một tin thử (chứng minh phần hiển thị chạy).
+5. Khách nhắn thật → tin hiện kèm tên, nội dung, vị trí dòng.
+
+Nếu bước 3 ra `nguồn request: chưa học được (sẽ tự dựng)` mà vẫn không có tin: gửi lại nguyên khối 🔍 —
+trong đó có sẵn url, số request, lỗi gần nhất để đối chiếu tiếp, không cần đoán.
 
 ### Vì sao 1.5.0 vẫn sót tin — bằng chứng trong HAR
 
@@ -445,7 +497,11 @@ __radar.set({domTrigger:false})  // tắt kích hoạt theo giao diện
 __radar.state                // dữ liệu thô: convs / people / items / pageCounts
 ```
 
-Kiểm thử: `node tools/test_radar.js` — **40 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
+Kiểm thử trên dữ liệu thật: `node tools/test_radar_real.js` — **19 mục**, chạy DOM thật
+(`demo/real_dom_fixture.html`) + payload thật 41 hội thoại (`batmesss.har` → `POST /api/v1/conversations`),
+ứng dụng gửi request bằng XMLHttpRequest như thật.
+
+Kiểm thử: `node tools/test_radar.js` — **50 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
 `POST /api/v1/conversations`, kích hoạt theo giao diện (đo được ~0,15 giây), tự gọi lại,
 **trang báo có tin chưa đọc → gọi riêng trang và báo đúng khách ngoài trang đầu**, và
 **hai tin trùng nội dung vẫn báo đủ 2 lần** (phân biệt bằng `mid`).

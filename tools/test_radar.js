@@ -80,12 +80,29 @@ window.fetch = function (input, init) {
   if (isList) {
     window.__listCalls++;
     window.__listUrls.push(((init && init.method) || 'GET') + ' ' + url);
+    (window.__fetchLog = window.__fetchLog || []).push({
+      m: ((init && init.method) || 'GET').toUpperCase(), u: url,
+      hasBody: !!(init && init.body), body: (init && init.body) || null
+    });
   }
   const isPageList = path.indexOf('/api/v1/pages/') >= 0;
   const body = isPageList
     ? { success: true, conversations: (window.__pageOverride || window.__convs), pages_with_current_count: {} }
     : { success: true, conversations: window.__convs, pages_with_current_count: window.__pageCounts };
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body), clone() { return this; } });
+};
+// ---- XMLHttpRequest giả: ứng dụng thật dùng axios (_resourceType "xhr" trong HAR) ----
+window.__xhrs = [];
+window.XMLHttpRequest = function () { this.__l = {}; this.readyState = 0; this.responseText = ''; };
+window.XMLHttpRequest.prototype.open = function (m, u) { this.__m = m; this.__u = u; };
+window.XMLHttpRequest.prototype.setRequestHeader = function (k, v) { this.__h = this.__h || {}; this.__h[k] = v; };
+window.XMLHttpRequest.prototype.addEventListener = function (t, f) { this.__l[t] = f; };
+window.XMLHttpRequest.prototype.send = function (b) { window.__xhrs.push({ m: this.__m, u: this.__u, body: b, h: this.__h, xhr: this }); };
+window.__xhrReply = function (i, json) {
+  const x = window.__xhrs[i].xhr;
+  x.responseText = JSON.stringify(json); x.readyState = 4;
+  if (x.__l.readystatechange) x.__l.readystatechange.call(x);
+  if (x.__l.load) x.__l.load.call(x);
 };
 /** khung insertMessage tổng hợp (cùng dạng với khung thật, không phải lắt léo escape)
  *  dạng: [5,\"insertMessage\",\"<nội dung>\",[9],[19,\"80\"],[19,\"<psid>\"],…,\"mid.…\",\"<id>\",[19,\"<sender>\"]
@@ -135,6 +152,7 @@ const toBuf = b64 => {
   return arr.buffer;
 };
 const items = () => window.__radar.items;
+const st = () => window.__radar.state;
 const diag = () => window.__radar.debug().diag;
 
 (async () => {
@@ -279,6 +297,52 @@ const diag = () => window.__radar.debug().diag;
   check(items().length === base4 + 2, 'hai tin trùng nội dung vẫn báo đủ 2 lần');
   const ids = new Set(items().slice(0, 2).map(i => i.msgId));
   check(ids.size === 2, 'phân biệt bằng mã tin (mid), không gộp nhầm');
+
+  // ---- 14. ứng dụng gửi request bằng XMLHttpRequest (axios) -> phải học đúng POST + body
+  window.__radar.clear();
+  const nx = window.__xhrs.length;
+  const mx = new window.XMLHttpRequest();
+  mx.open('POST', '/api/v1/conversations?pages[' + PAGE + ']=0&unread_first=true&mode=OR');
+  mx.setRequestHeader('content-type', 'multipart/form-data; boundary=----WebKitFormBoundaryTEST');
+  const fdx = new window.FormData(); fdx.append('type', 'ALL,UNREAD');
+  mx.send(fdx);
+  await sleep(120);
+  check(window.__xhrs.length === nx + 1, 'XHR: thấy request danh sách của ứng dụng (axios)');
+  check(st().listReq && st().listReq.method === 'POST', 'XHR: học được method POST (không rơi về GET)');
+  check(st().listReq && st().listReq.body != null, 'XHR: học được body');
+
+  window.__fetchLog = [];
+  window.__radar.poll();
+  await sleep(300);
+  const replay = (window.__fetchLog || [])[0];
+  check(!!replay && replay.m === 'POST', 'gọi lại danh sách bằng đúng method POST (' + (replay && replay.m) + ')');
+  check(!!replay && replay.hasBody, 'gọi lại danh sách có body (không gửi rỗng)');
+
+  // response của ứng dụng (đi qua XHR) cũng được đọc -> báo tin
+  const baseX = items().length;
+  const convX = {
+    id: PAGE + '_777666555', page_id: PAGE, from_psid: '777666555',
+    customers: [{ id: 'u9', fb_id: '777666555', name: 'Khách Qua XHR' }],
+    snippet: 'Còn hàng không shop', updated_at: new Date().toISOString(),
+    last_sent_by: { id: '777666555', name: 'Khách Qua XHR' }
+  };
+  window.__xhrReply(nx, { conversations: [convX], pages_with_current_count: {} });
+  await sleep(300);
+  check(items().length === baseX + 1, 'đọc được response của chính ứng dụng (XHR) -> báo tin khách');
+  check(items().some(i => i.name === 'Khách Qua XHR'), 'đúng tên khách từ response XHR');
+  check(st().diag.xhrHits >= 1, 'chẩn đoán đếm được request XHR');
+
+  // ---- 15. chưa học được request nào -> tự dựng request danh sách (trang lấy từ DOM)
+  const savedReq = st().listReq;
+  st().listReq = null;
+  window.__fetchLog = [];
+  window.__radar.poll();
+  await sleep(300);
+  const own = (window.__fetchLog || [])[0];
+  check(!!own && own.m === 'POST' && own.u.indexOf('/api/v1/conversations?pages[') === 0,
+    'chưa có request mẫu -> tự dựng POST /api/v1/conversations?pages[…]');
+  check(!!own && own.hasBody, 'request tự dựng có body type=ALL,UNREAD');
+  st().listReq = savedReq;
 
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
