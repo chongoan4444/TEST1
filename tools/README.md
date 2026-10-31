@@ -1,3 +1,15 @@
+## Radar 2.1.0 — sửa đọc giờ và đính chính bộ lọc
+
+**Đính chính thông tin 2.0.0 bên dưới:** không thể khẳng định `tags=["NO_TAG"]` chỉ trả hội thoại chưa gắn tag. Trong `tinnhanmoi.har`, chính response của request này có hội thoại mang `tags: [4,83,172]`. Bản 2.1.0 thử request không lọc tag; nếu HTTP lỗi thì thử biến thể trong HAR. Đây là đường cần kiểm chứng trên trình duyệt thật, không phải bằng chứng đã hoạt động ngoài thực tế.
+
+Lỗi cụ thể tìm thấy trong mã: `Date.parse(updated_at)` hiểu chuỗi thiếu múi giờ theo giờ máy. Pancake trả `2026-10-30T04:07:08.173000`, còn header response là `Fri, 30 Oct 2026 04:07:08 GMT`. Ở Việt Nam, đọc sai thành giờ địa phương khiến tin mới bị lệch 7 tiếng và bị loại là tin cũ. 2.1.0 đọc chuỗi này theo UTC, dùng chung cho socket và danh sách.
+
+- Nhãn chưa gắn tag chỉ xuất hiện khi trường `tags` là mảng rỗng; thiếu trường không được đoán là chưa có tag.
+- Lần đầu nhận nguồn bổ sung chỉ ghi mốc, tránh báo hàng loạt tin cũ.
+- Sau 12 giây có dòng tự kiểm tra trên bảng; trạng thái HTTP cũng được ghi lại. Dấu kiểm chỉ thể hiện kiểm tra kỹ thuật, **không chứng minh báo trước hoặc không bỏ sót**.
+- Kiểm thử ở múi giờ `Asia/Ho_Chi_Minh`: mock 75 mục; DOM + API thật 19 mục. Các bộ kiểm thử nhãn hiện có đạt.
+- Chưa xác nhận thời điểm báo so với dòng hiển thị trong phiên Pancake của người dùng; không cam kết báo trước từ kết quả mô phỏng.
+
 # Phân loại tệp khách theo nguồn (Pancake)
 
 Cho bạn biết **mỗi tệp khách đến từ đâu** — quảng cáo, comment bài viết, livestream hay khách tự nhắn —

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.0.0
+// @version      2.1.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.0.0';
+  const VERSION = '2.1.0';
 
   const DEFAULTS = {
     on: true,
@@ -85,7 +85,7 @@
       pollOk: 0, pollBad: 0, pollJsonErr: 0, hiddenSkips: 0,
       phxTopics: {}, phxEvents: {}, rawFrames: [], jsonFrames: 0,
       convPatches: 0, patchWithSender: 0, patchWithSnippet: 0, patchKeys: '', ticks: 0,
-      untaggedPolls: 0, untaggedErr: 0, untaggedConvs: 0,
+      untaggedPolls: 0, untaggedErr: 0, untaggedConvs: 0, untaggedSeen: 0, untaggedStatus: 0, untaggedUseAlt: false,
       msgFrames: 0, threadFrames: 0, parsed: 0,
       skippedOut: 0, skippedUnknown: 0, lastFrameAt: 0, lastErr: '', lastSender: ''
     }
@@ -274,15 +274,23 @@
     try { render(); } catch (e) { /* ignore */ }
   }
 
-  /** đọc mốc thời gian kiểu Pancake: 2026-10-19T10:08:45.000000 (không có múi giờ) */
+  /**
+   * Mốc thời gian kiểu Pancake: "2026-10-30T04:07:08.173000" — GIỜ UTC nhưng THIẾU chữ Z.
+   * Bằng chứng (tinnhanmoi.har): updated_at = 2026-10-30T04:07:08.173000 trùng đúng header
+   * `date: Fri, 30 Oct 2026 04:07:08 GMT` của chính response đó.
+   * Nếu để JS hiểu là giờ địa phương thì ở VN mọi mốc bị lệch 7 tiếng -> tin mới bị coi là cũ
+   * -> hội thoại MỚI không bao giờ được báo (và tin qua socket bị loại vì "cũ quá 5 phút").
+   */
   function parseTs(v) {
     if (v == null || v === '') return 0;
     if (typeof v === 'number') return v > 1e12 ? v : (v > 1e9 ? v * 1000 : 0);
-    const str = String(v);
-    const t = Date.parse(str);
-    if (!isNaN(t)) return t;
-    const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/.exec(str);
-    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : 0;
+    const str = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(str)) {
+      const t = Date.parse(str.replace(' ', 'T') + 'Z');
+      if (!isNaN(t)) return t;
+    }
+    const t2 = Date.parse(str);
+    return isNaN(t2) ? 0 : t2;
   }
 
   /**
@@ -290,8 +298,8 @@
    *   ["7",null,"multiple_pages:<uid>","pages:update_conversation",
    *    {"page_id":"769625892902516","conversation":{"id":"769625892902516_2890…","type":"INBOX","tags":[…],"seen":true,…}}]
    * Khung này tới TRƯỚC khi React vẽ lại dòng, nên đây là đường "báo trước".
-   *  • nếu khung có đủ snippet + last_sent_by  -> báo ngay (biết chắc chiều tin)
-   *  • nếu khung chỉ là bản vá thiếu dữ liệu  -> gọi riêng trang đó ngay (150 ms) để lấy bản chuẩn
+   *  • khung có snippet + last_sent_by  -> báo ngay (biết chắc chiều tin)
+   *  • khung chỉ là bản vá thiếu dữ liệu -> gọi riêng trang đó ngay để lấy bản chuẩn
    */
   function onConversationPatch(payload, pageId) {
     const d = state.diag;
@@ -318,10 +326,10 @@
         snippet: cv.snippet != null ? cv.snippet : cv.last_message,
         updated_at: cv.updated_at || cv.updatedAt || '',
         last_sent_by: cv.last_sent_by || null,
-        customers: cv.customers || null
+        customers: cv.customers || null,
+        tags: cv.tags
       };
       if (hasSender) ingestList({ conversations: [patch] }, true, true, 'websocket');
-      else if (patch.last_sent_by) ingestList({ conversations: [patch] }, true, true, 'websocket');
     }
     // dù khung đủ hay thiếu: đẩy nhanh dữ liệu chuẩn của trang (last_sent_by chính xác)
     if (pid && /^\d{5,}$/.test(pid)) {
@@ -453,6 +461,8 @@
     if (viaName === 'chưa gắn tag') state.diag.untaggedConvs = arr.length;
     if (!quiet || arr.length > 1) logEvent('🔄', (viaName === 'chưa gắn tag' ? 'chưa gắn tag: ' : 'danh sách: ') + arr.length + ' hội thoại');
     const fresh = [];
+    // lần ĐẦU thấy một nguồn thì chỉ ghi nhớ, không báo (tránh đổ một loạt tin cũ khi mới cài)
+    const seedGate = !state.seeded || (viaName === 'chưa gắn tag' && !state.seededUntagged);
     arr.forEach(cv => {
       if (!cv || typeof cv !== 'object') return;
       const id = String(cv.id || cv.conversation_id || '');
@@ -465,6 +475,9 @@
       else if (cv.from && cv.from.name) name = String(cv.from.name);
       const avatar = (Array.isArray(cs) && cs[0] && (cs[0].avatar || cs[0].picture)) || cv.from_avatar || '';
       const snippet = String(cv.snippet || '');
+      // "chưa gắn tag" = hội thoại không có tag nào (đọc đúng trường tags thật của Pancake)
+      const untaggedConv = Array.isArray(cv.tags) && cv.tags.length === 0;
+      if (untaggedConv) state.diag.untaggedSeen = (state.diag.untaggedSeen || 0) + 1;
       const updated = String(cv.updated_at || '');
       // last_sent_by là OBJECT: {id, name, …} -> id chính là psid khách hoặc id trang
       const sb = cv.last_sent_by;
@@ -475,18 +488,24 @@
 
       // hội thoại MỚI (chưa từng thấy) cũng là tin mới — nhưng chỉ báo khi cập nhật gần đây,
       // tránh báo cả loạt hội thoại cũ khi lần đầu gọi riêng một trang
-      const ts = updated ? (Date.parse(updated) || 0) : 0;
+      const ts = parseTs(updated);
       const recent = !updated || (ts && Date.now() - ts < 15 * 60 * 1000);
       const isNewConv = !prev && !!snippet && recent;
-      if (state.seeded && snippet && ((prev && (prev.updated_at !== updated || prev.snippet !== snippet)) || isNewConv)) {
+      if (!seedGate && snippet && ((prev && (prev.updated_at !== updated || prev.snippet !== snippet)) || isNewConv)) {
         let outgoing = null;
         if (sbId && psid) outgoing = (sbId === psid) ? false : (pageId && sbId === pageId ? true : null);
         const lag = state.lastChangeAt && (Date.now() - state.lastChangeAt < 15000) ? (Date.now() - state.lastChangeAt) : 0;
-        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag, updatedAt: updated });
+        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag, updatedAt: updated, untagged: untaggedConv });
       }
     });
 
-    if (!state.seeded) { state.seeded = true; watchPageCounts(json); if (!quiet) render(); return; }
+    if (seedGate) {
+      if (!state.seeded) state.seeded = true;
+      if (viaName === 'chưa gắn tag') state.seededUntagged = true;
+      watchPageCounts(json);
+      if (!quiet) render();
+      return;
+    }
     if (CFG.watchList) fresh.forEach(f => route(f, viaName || 'danh sách'));
     if (!fromPage && !quiet) watchPageCounts(json);
     if (!quiet) render();
@@ -598,7 +617,11 @@
       const p = _fetch.apply(this, arguments);
       try {
         if (isListUrl(url)) {
-          p.then(r => { let c; try { c = r.clone(); } catch (e) { return; } c.json().then(j => ingestList(j, false, false, /NO_TAG/i.test(url) ? 'chưa gắn tag' : undefined)).catch(err => { state.diag.pollJsonErr = (state.diag.pollJsonErr || 0) + 1; logEvent('⚠️', 'đọc JSON danh sách lỗi: ' + ((err && err.message) || err)); }); }).catch(() => {});
+          p.then(r => { let c; try { c = r.clone(); } catch (e) { return; } c.json().then(j => {
+          const ur = state.untaggedReq;
+          const isU = !!ur && (url === ur.url || url === ur.altUrl || /NO_TAG/i.test(url));
+          ingestList(j, false, false, isU ? 'chưa gắn tag' : undefined);
+        }).catch(err => { state.diag.pollJsonErr = (state.diag.pollJsonErr || 0) + 1; logEvent('⚠️', 'đọc JSON danh sách lỗi: ' + ((err && err.message) || err)); }); }).catch(() => {});
         }
       } catch (e) { /* ignore */ }
       return p;
@@ -753,7 +776,11 @@
     const q = ids.map(id => 'pages[' + id + ']=0').join('&');
     state.untaggedReq = {
       key: key, own: true, untagged: true, lastPoll: 0,
-      url: '/api/v1/conversations?' + q + '&unread_first=true&mode=OR' +
+      // KHÔNG gắn bộ lọc tags: dữ liệu thật (tinnhanmoi.har) cho thấy request có tags=["NO_TAG"]
+      // vẫn trả về hội thoại ĐÃ có tag ([4,83,172]) -> bộ lọc đó không dùng để tách "chưa gắn tag".
+      // Bỏ hẳn bộ lọc thì nhận được nhiều hơn, rồi tự phân loại bằng chính trường tags của hội thoại.
+      url: '/api/v1/conversations?' + q + '&unread_first=true&mode=OR&except_tags=[]&from_platform=web',
+      altUrl: '/api/v1/conversations?' + q + '&unread_first=true&mode=OR' +
         '&tags=%5B%22NO_TAG%22%5D&except_tags=[]&cursor_mode=true&from_platform=web',
       method: 'POST',
       headers: null,
@@ -764,7 +791,7 @@
 
   function pollUntagged(force) {
     if (!CFG.on || !CFG.watchList || !CFG.untaggedPoll) return;
-    if (state.diag.untaggedErr >= 3) return;                       // hỏng 3 lần thì thôi, không phá Pancake
+    if (state.diag.untaggedErr >= 2) return;                       // hỏng 2 lần thì thôi, không phá Pancake
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     const r = buildUntaggedReq();
     if (!r) return;
@@ -775,11 +802,22 @@
     const prevInternal = state.internal;
     state.internal = true;
     try {
-      const pr = fetch(r.url, { method: 'POST', credentials: 'include', cache: 'no-store', body: r.body });
+      const url = (state.diag.untaggedUseAlt && r.altUrl) ? r.altUrl : r.url;
+      const pr = fetch(url, { method: 'POST', credentials: 'include', cache: 'no-store', body: r.body });
       Promise.resolve(pr).then(res => {
         if (res && res.ok === false) {
+          state.diag.untaggedStatus = res.status;
+          if (!state.diag.untaggedUseAlt && r.altUrl) {
+            // biến thể đã có trong HAR (tags=["NO_TAG"]) — thử một lần
+            state.diag.untaggedUseAlt = true;
+            logEvent('🛠', 'chưa gắn tag HTTP ' + res.status + ' -> thử lại bằng biến thể tags=NO_TAG');
+            return;
+          }
           state.diag.untaggedErr = (state.diag.untaggedErr || 0) + 1;
-          logEvent('⚠️', 'danh sách chưa gắn tag HTTP ' + res.status);
+          logEvent('⚠️', 'danh sách chưa gắn tag HTTP ' + res.status + ' (' + (state.diag.untaggedErr >= 2 ? 'đã tắt' : 'còn thử') + ')');
+        } else if (res && res.ok) {
+          state.diag.untaggedStatus = 200;
+          state.diag.untaggedErr = 0;
         }
       }).catch(err => logEvent('⚠️', 'gọi chưa gắn tag lỗi: ' + err.message));
     } catch (e) {
@@ -961,7 +999,8 @@
       sender: hit.sender || '',
       lag: hit.lag || 0,
       updatedAt: hit.updatedAt || '',
-      msgId: hit.msgId || ''
+      msgId: hit.msgId || '',
+      untagged: !!hit.untagged
     };
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
@@ -999,6 +1038,8 @@
   .__rd_head button.on{background:#0ea5e9;color:#fff;border-color:#0ea5e9}
   .__rd_stat{margin-top:6px;font-size:10.5px;color:#7dd3fc;font-family:ui-monospace,Menlo,monospace}
   .__rd_stat .bad{color:#fca5a5}
+  .__rd_check{font-size:11px;line-height:1.35;color:#2f7d32;background:#f1f8f1;border-top:1px solid #e4efe4;padding:3px 8px 4px}
+  .__rd_check.bad{color:#b3261e;background:#fdf1f0;border-top-color:#f3d6d3}
   .__rd_diag{display:none;margin-top:6px;font-size:10.5px;color:#94a3b8;font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
   .__rd_diag.open{display:block}
   .__rd_empty{padding:14px 12px;color:#94a3b8;font-size:12px}
@@ -1084,6 +1125,8 @@
       '<button data-a="diag" title="Chẩn đoán">🔍</button>' +
       '<button data-a="clear" title="Xoá danh sách">🧹</button></div>' +
       '<div class="__rd_stat' + (d.hook ? '' : ' bad') + '">' + esc(stat) + '</div>' +
+      '<div class="__rd_check' + (state.selfCheck && !state.selfCheck.ok ? ' bad' : '') + '">' +
+        esc(state.selfCheck ? state.selfCheck.line : 'đang tự kiểm tra…') + '</div>' +
       '<div class="__rd_diag' + (state.diagOpen ? ' open' : '') + '">' + esc(diagText()) + '</div>' +
       '</div>';
 
@@ -1106,7 +1149,7 @@
           '<span class="__rd_pos' + (top ? ' top' : '') + '">' + esc(label) + '</span>' +
           '<span class="__rd_time">' + timeStr(it.at) + '</span></div>' +
           '<div class="__rd_snip">' + esc(it.snippet) + '</div>' +
-          (it.via === 'chưa gắn tag' ? '<div class="__rd_ad">🏷️ chưa gắn tag</div>' : '') +
+          (it.untagged ? '<div class="__rd_ad">🏷️ chưa gắn tag</div>' : '') +
           (it.ads && it.ads.length ? '<div class="__rd_ad">🔥 quảng cáo · ad_id ' + esc(it.ads[0]) + '</div>' : '') +
           '<div class="__rd_via">chiều: ' + (it.dirKnown ? 'khách → shop' : 'chưa rõ') + ' · ' +
             (it.via === 'websocket' ? 'báo TRƯỚC khi dòng hiện' : (it.lag ? 'báo sau dòng ' + (it.lag / 1000).toFixed(1) + 's' : 'nguồn: ' + esc(VIA_TEXT[it.via] || it.via))) + '</div>' +
@@ -1143,6 +1186,25 @@
         if (hit) focusRow(hit.psid, hit.convId);
       });
     });
+  }
+
+  /** tự kiểm tra: trả lời được câu "vì sao không báo" ngay trên bảng, không cần mở 🔍 */
+  function selfCheck() {
+    const d = state.diag;
+    const problems = [];
+    if (!d.hook) problems.push('chưa treo được hook WebSocket');
+    if (!state.listReq) problems.push('chưa học được request danh sách của ứng dụng');
+    if (!state.listHits) problems.push('chưa nhận được dữ liệu danh sách nào');
+    if (!d.ticks) problems.push('nhịp quét chưa chạy (setInterval không hoạt động?)');
+    if (!rows().length) problems.push('không thấy dòng hội thoại nào trên màn hình');
+    if (CFG.untaggedPoll && d.untaggedErr >= 2) problems.push('hỏi nhóm chưa gắn tag lỗi HTTP ' + (d.untaggedStatus || '?'));
+    const ok = !problems.length;
+    const line = (ok ? '✅' : '❗') + ' tự kiểm tra: socket ' + (d.frames || 0) + ' khung · danh sách ' + state.listHits +
+      ' lần · quét ' + (d.ticks || 0) + ' lần · chưa gắn tag ' + (d.untaggedPolls || 0) + ' lần' +
+      (d.untaggedStatus ? ' (HTTP ' + d.untaggedStatus + ')' : '') + ' · dòng ' + rows().length +
+      (ok ? '' : ' — LỖI: ' + problems.join('; '));
+    state.selfCheck = { ok: ok, line: line, at: Date.now() };
+    logEvent(ok ? '✅' : '❗', line);
   }
 
   function diagText() {
@@ -1209,6 +1271,9 @@
     set(patch) { Object.assign(CFG, patch); save(); render(); return CFG; },
     clear() { state.items = []; render(); },
     scan: () => { scanDom(); render(); return state.domHits; },
+    /** tự kiểm tra ngay (dùng cho kiểm thử / khi cần biết vì sao không báo) */
+    selfCheck: () => { selfCheck(); render(); return state.selfCheck; },
+    parseTs: v => parseTs(v),
     /** gọi lại danh sách ngay (dùng cho kiểm thử / khi cần làm mới) */
     poll: () => {
       const r0 = state.listReq || state.defaultReq;
@@ -1249,6 +1314,9 @@
     }, Math.max(1000, Number(CFG.pollMs) || 2000));
 
     setInterval(() => { try { pollUntagged(); } catch (e) { /* ignore */ } }, Math.max(700, Number(CFG.untaggedMs) || 1200));
+
+    setTimeout(() => { try { selfCheck(); render(); } catch (e) { /* ignore */ } }, 12000);
+    setInterval(() => { try { selfCheck(); render(); } catch (e) { /* ignore */ } }, 60000);
 
     // nhịp tim: chứng minh radar còn thức và cho biết 30 giây qua nó làm được gì
     const hb = { listHits: 0, polls: 0, frames: 0, skippedOut: 0 };

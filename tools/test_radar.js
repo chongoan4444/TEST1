@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+process.env.TZ = 'Asia/Ho_Chi_Minh';   // kiểm thử ở đúng múi giờ của shop (UTC+7)
 /**
  * test_radar.js — kiểm tra script "Radar tin nhắn TỚI" (chỉ tin KHÁCH gửi đến).
  *
@@ -87,7 +88,8 @@ window.fetch = function (input, init) {
       hasBody: !!(init && init.body), body: (init && init.body) || null
     });
   }
-  const isUntagged = url.indexOf('NO_TAG') >= 0;
+  const uq = window.__radar && window.__radar.state && window.__radar.state.untaggedReq;
+  const isUntagged = !!uq && (url === uq.url || url === uq.altUrl || url.indexOf('NO_TAG') >= 0);
   if (isUntagged && url.indexOf('/messages') < 0) window.__untaggedUrls.push(url);
   const isPageList = path.indexOf('/api/v1/pages/') >= 0;
   if (isUntagged && !isPageList) {
@@ -433,22 +435,58 @@ const diag = () => window.__radar.debug().diag;
   window.__pageOverride = null;
 
   // ---- 19. hội thoại CHƯA GẮN TAG (danh sách của app lọc theo tag nên không thấy)
+  window.__untagged = [{
+    id: PAGE + '_121212121', page_id: PAGE, from_psid: '121212121',
+    customers: [{ id: 'u0', fb_id: '121212121', name: 'Khách Cũ' }],
+    snippet: 'Tin cũ để gieo mốc', tags: [],
+    updated_at: new Date(Date.now() - 3600 * 1000).toISOString().replace('Z', '000'),
+    last_sent_by: { id: '121212121', name: 'Khách Cũ' }
+  }];
+  await sleep(1800);                     // lần đầu của nguồn này chỉ ghi nhớ, không báo
+  check(window.__untaggedUrls.length > 0, 'có hỏi riêng nhóm chưa gắn tag');
+  check(!!st().untaggedReq && /except_tags=\[\]/.test(st().untaggedReq.url) && st().untaggedReq.method === 'POST',
+    'request riêng cho nhóm chưa gắn tag đúng dạng POST /api/v1/conversations (bỏ lọc tags)');
+  check((st().diag.untaggedStatus || 0) === 0 || st().diag.untaggedStatus === 200, 'chưa ghi nhận lỗi HTTP khi hỏi');
   const base6 = items().length;
+  check(base6 === 0 || !items().some(i => i.name === 'Khách Cũ'), 'lần đầu thấy nguồn chưa gắn tag -> chỉ ghi nhớ, không đổ tin cũ');
+
+  // khách chưa gắn tag nhắn tin mới: mốc thời gian kiểu Pancake (UTC thiếu Z)
   window.__untagged = [{
     id: PAGE + '_444333222', page_id: PAGE, from_psid: '444333222',
     customers: [{ id: 'u4', fb_id: '444333222', name: 'Khách Chưa Tag' }],
-    snippet: 'Tin chưa gắn tag', updated_at: new Date().toISOString(), tags: [],
+    snippet: 'Tin chưa gắn tag', tags: [],
+    updated_at: new Date().toISOString().replace('Z', '000'),
     last_sent_by: { id: '444333222', name: 'Khách Chưa Tag' }
   }];
   await sleep(1800);
-  check(window.__untaggedUrls.length > 0, 'có hỏi riêng nhóm chưa gắn tag (tags=["NO_TAG"])');
-  check(window.__untaggedUrls.some(u => /tags=%5B%22NO_TAG%22%5D|tags=\[%22NO_TAG%22\]/.test(u)),
-    'đúng tham số tags=["NO_TAG"] như trong HAR');
-  check(window.__untaggedUrls.some(u => u.indexOf('POST ') === 0) === false, '(đánh dấu)');
   check(items().some(i => i.name === 'Khách Chưa Tag'), 'hội thoại chưa gắn tag -> báo được', items().length - base6);
   check(items().some(i => i.via === 'chưa gắn tag'), 'ghi đúng nguồn: chưa gắn tag', JSON.stringify(items().map(i => [i.name, i.via])));
+  check(items().some(i => i.untagged === true), 'đánh dấu đúng là chưa gắn tag');
   check((diag().untaggedPolls || 0) >= 1, 'chẩn đoán đếm được lần hỏi chưa gắn tag');
   window.__untagged = null;
+
+  // ---- 19b. mốc thời gian kiểu Pancake là UTC thiếu Z (lệch 7 tiếng nếu hiểu là giờ VN)
+  check(Math.abs(window.__radar.parseTs('2026-10-30T04:07:08.173000') - Date.parse('2026-10-30T04:07:08.173Z')) < 5,
+    'đọc đúng mốc UTC thiếu Z (khớp header GMT của response thật)');
+
+  window.__convs.push({
+    id: PAGE + '_333222111', page_id: PAGE, from_psid: '333222111',
+    customers: [{ id: 'u3', fb_id: '333222111', name: 'Khách Mới UTC' }],
+    snippet: 'Tin mới lúc này', tags: [7],
+    updated_at: new Date().toISOString().replace('Z', '000'),
+    last_sent_by: { id: '333222111', name: 'Khách Mới UTC' }
+  });
+  window.fetch('/api/v1/pages/' + PAGE + '/conversations?unread_first=true&mode=OR', { method: 'POST' });
+  await sleep(500);
+  check(items().some(i => i.name === 'Khách Mới UTC'), 'hội thoại MỚI với mốc UTC thiếu Z vẫn được báo (không lệch 7 tiếng)');
+
+  // ---- 20. tự kiểm tra hiện ngay trên bảng
+  const sc = window.__radar.selfCheck();
+  await sleep(120);
+  const chk = doc.querySelector('.__rd_check');
+  check(!!chk && /tự kiểm tra/.test(chk.textContent), 'bảng có dòng "tự kiểm tra"');
+  check(!!sc && typeof sc.ok === 'boolean', 'tự kiểm tra trả về kết luận ok/kèm lý do');
+  check(!!sc && /danh sách \d+ lần/.test(sc.line), 'dòng tự kiểm tra có số liệu thật (' + (sc && sc.line) + ')');
 
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
