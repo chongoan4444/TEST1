@@ -355,3 +355,33 @@ Từ 3.8.0 script nghe chính khung đó:
 Kết quả: nhãn **QC** có thể hiện ngay khi dòng vừa xuất hiện, không phải chờ gọi API tin nhắn.
 Đọc thêm tin nhắn vẫn giữ nguyên (để nhận BV/LV và xác nhận lại).
 Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi thứ tự quay về như 3.7.0, không lỗi.
+
+## 📨 Radar tin nhắn tới — script RIÊNG (`userscripts/pancake-new-message-radar.user.js`)
+
+Một userscript độc lập (không phụ thuộc script gắn nhãn), báo **tin nhắn tới trước khi
+Pancake vẽ dòng chat**: tên khách · nội dung · **vị trí dòng sẽ xuất hiện**.
+
+| Việc | Cách làm |
+|---|---|
+| Biết tin trước | đọc khung websocket `wss://edge-chat.facebook.com/chat` (`deleteThenInsertThread`) |
+| Tên khách | psid ghép với tên trong API danh sách (`<page_id>_<psid>`, 1175/1177 khớp trong HAR) |
+| Nội dung | chính đoạn `snippet` trong khung (đã bỏ escape `\uXXXX`) |
+| Vị trí | dòng đang có trong danh sách → `dòng 3 → #1`; chưa có → `dòng mới #1` |
+| Ảnh đại diện | URL `scontent…` trong khung |
+| Nguồn quảng cáo | nhãn `ad_id.<số>` trong khung → hiện `🔥 quảng cáo` |
+| Không đoán | khung gộp **nhiều hơn 1 psid** → bỏ; không có nội dung → bỏ |
+| Tin của shop | `Bạn:` / `Bạn đã gửi…` → mặc định bỏ (nút **chỉ tin tới**) |
+
+Bảng radar nằm góc phải dưới (nút **📨**), bấm vào một dòng để nhảy tới hội thoại đó.
+Thông báo hệ thống: bấm **🔔** (xin quyền một lần).
+
+```js
+__radar.debug()                     // trạng thái
+__radar.set({on:false})             // tắt radar
+__radar.set({onlyIncoming:false})   // báo cả tin của shop
+__radar.clear()                     // xoá danh sách
+__radar.feed('<base64 khung thật>') // nạp khung để thử
+```
+
+Kiểm thử: `NODE_PATH=… node tools/test_radar.js` (26 mục, dùng khung thật trong
+`demo/ws_frames.json`). Xem thử giao diện: `demo/mock_radar.html`.

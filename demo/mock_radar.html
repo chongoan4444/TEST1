@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Radar tin nhắn tới — bản mô phỏng</title>
+<style>
+  body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f1f5f9;color:#0f172a}
+  header{padding:14px 18px;background:#0f172a;color:#e2e8f0}
+  header b{font-size:15px}
+  header span{color:#94a3b8;font-size:12px;display:block;margin-top:2px}
+  .wrap{display:flex;gap:18px;padding:18px;align-items:flex-start}
+  .col{background:#fff;border-radius:14px;box-shadow:0 6px 20px rgba(15,23,42,.08);overflow:hidden}
+  .col h3{margin:0;padding:11px 14px;font-size:13px;background:#e2e8f0;color:#334155}
+  .list{width:340px}
+  .conversation-list-item{display:flex;gap:10px;align-items:center;height:64px;padding:0 14px;border-top:1px solid #eef2f7;transition:transform .25s}
+  .ava{width:34px;height:34px;border-radius:50%;background:#cbd5e1;flex:0 0 34px;display:flex;align-items:center;justify-content:center;font-weight:600;color:#475569}
+  .nm{font-weight:600;font-size:13px}
+  .sn{font-size:12px;color:#64748b;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .side{width:420px}
+  .btns{padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px}
+  button{padding:7px 11px;border-radius:9px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:12px}
+  button.pri{background:#0ea5e9;border-color:#0ea5e9;color:#fff}
+  .hint{padding:0 14px 14px;font-size:12px;color:#64748b}
+  code{background:#eef2f7;padding:1px 5px;border-radius:5px}
+</style>
+</head>
+<body>
+<header>
+  <b>📨 Radar tin nhắn tới — mô phỏng</b>
+  <span>Bảng radar ở góc phải dưới là của userscript thật. Nút bên phải bắn thử khung tin nhắn.</span>
+</header>
+
+<div class="wrap">
+  <div class="col list">
+    <h3>Danh sách hội thoại (Pancake mô phỏng)</h3>
+    <div class="conversation-list" id="list"></div>
+  </div>
+  <div class="col side">
+    <h3>Bắn thử</h3>
+    <div class="btns">
+      <button class="pri" id="bCust">Khách nhắn</button>
+      <button id="bShop">Shop trả lời</button>
+      <button id="bMulti">Khung gộp nhiều hội thoại</button>
+      <button id="bReal">Khung THẬT từ HAR</button>
+    </div>
+    <div class="hint">
+      “Khách nhắn” bắn khung websocket <b>trước</b>, 1,2 giây sau mới chèn dòng vào danh sách —
+      đúng ý “báo trước khi có tin nhắn tới”.<br>
+      Console: <code>__radar.debug()</code>, <code>__radar.help()</code>.
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------- dữ liệu mô phỏng
+const PAGE = '834072796450267';
+const PEOPLE = [
+  { psid: '61594409994701', name: 'Ngọc Ánh' },
+  { psid: '100061610676863', name: 'Trần Bảo' },
+  { psid: '2516498585512439', name: 'Hồng Nhung' },
+  { psid: '2296305777859760', name: 'Kim Oanh' }
+];
+const SNIPPETS = ['Ok shop', 'Ib mình mẫu này', 'Còn size L không', 'Giao trong hôm nay không'];
+const listEl = document.getElementById('list');
+
+function rowHtml(p, snippet, idx) {
+  return '<div class="conversation-list-item" id="' + PAGE + '_' + p.psid + '__' + idx + '">' +
+    '<div class="ava">' + p.name.charAt(0) + '</div>' +
+    '<div><div class="nm">' + p.name + '</div><div class="sn">' + snippet + '</div></div></div>';
+}
+
+function buildList() {
+  listEl.innerHTML = PEOPLE.map((p, i) => rowHtml(p, SNIPPETS[i] || 'Chào shop', i)).join('');
+}
+buildList();
+
+// ---------------------------------------------------------------- WebSocket giả
+window.WebSocket = class FakeWS {
+  constructor(url) { this.url = url; this._l = []; window.__ws = this; }
+  addEventListener(t, f) { this._l.push([t, f]); }
+  removeEventListener(t, f) { this._l = this._l.filter(x => x[1] !== f); }
+  dispatch(kind, data) { this._l.slice().forEach(x => { if (x[0] === kind) x[1]({ data: data }); }); }
+  send() {} close() {}
+};
+
+// ---------------------------------------------------------------- API danh sách giả
+const convs = PEOPLE.map((p, i) => ({
+  id: PAGE + '_' + p.psid, page_id: PAGE, from_psid: p.psid, type: 'INBOX',
+  customers: [{ id: 'u' + i, fb_id: p.psid, name: p.name }],
+  snippet: SNIPPETS[i] || '', updated_at: '2026-10-31T0' + (2 + i) + ':00:00Z', last_sent_by: 'customer'
+}));
+const realFetch = window.fetch.bind(window);
+window.fetch = function (input) {
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  if (!/\/conversations(\?|$)/.test(url)) return realFetch(input);   // để các URL khác đi bình thường
+  const body = { success: true, conversations: convs };
+  return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body), clone() { return this; } });
+};
+</script>
+
+<script src="../userscripts/pancake-new-message-radar.user.js"></script>
+
+<script>
+// ---------------------------------------------------------------- nạp danh sách để radar biết TÊN
+fetch('/api/v1/pages/' + PAGE + '/conversations?unread_first=true&mode=OR', { method: 'POST' });
+
+function frame(psid, text) {
+  return 'deleteThenInsertThread",[19,"' + Date.now() + '"],[19,"-1"],"' + text + '",[9],"entity_id=' + psid + '&"';
+}
+
+let n = 0;
+function pushNewRow(p, snippet) {
+  const old = document.getElementById(PAGE + '_' + p.psid + '__0');
+  if (old) old.remove();
+  listEl.insertAdjacentHTML('afterbegin', rowHtml(p, snippet, 900 + (n++)));
+}
+
+document.getElementById('bCust').onclick = () => {
+  const p = PEOPLE[0];
+  const text = 'Còn size ' + ['M', 'L', 'XL'][n % 3] + ' không shop ơi';
+  window.__ws.dispatch('message', frame(p.psid, text));   // websocket tới TRƯỚC
+  setTimeout(() => pushNewRow(p, text), 1200);            // 1,2s sau danh sách mới vẽ lại
+};
+
+document.getElementById('bShop').onclick = () => {
+  window.__ws.dispatch('message', frame(PEOPLE[1].psid, 'Bạn: Em gửi bảng size ngay ạ'));
+};
+
+document.getElementById('bMulti').onclick = () => {
+  window.__ws.dispatch('message',
+    'deleteThenInsertThread",[19,"1"],[19,"-1"],"Tin trong khung gộp",[9],' +
+    '"entity_id=777000111222&entity_id=888000222333&"name","ad_id.120259999999999"');
+};
+
+document.getElementById('bReal').onclick = async () => {
+  const res = await fetch('../demo/ws_frames.json');
+  const data = await res.json();
+  const bin = atob(data.frames[0].b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  window.__ws.dispatch('message', buf.buffer);
+};
+</script>
+</body>
+</html>
