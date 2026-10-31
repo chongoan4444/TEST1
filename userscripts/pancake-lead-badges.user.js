@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Phân loại tệp khách theo nguồn
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      3.7.0
+// @version      3.8.0
 // @description  Gắn nhãn Quảng cáo / Bài viết / Livestream / Tự nhắn cho các hội thoại ĐANG HIỂN THỊ trên Pancake — chỉ khi có bằng chứng thật, không chấm điểm, chưa đọc tin nhắn thì hiện "?". Alt+O bật/tắt.
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -29,6 +29,7 @@
     enrichLimit: 3,         // tối đa N hội thoại mỗi lượt (càng ít càng nhẹ)
     enrichSpacing: 700,     // ms giữa 2 request
     enrichTTL: 600000,      // không hỏi lại hội thoại đã hỏi trong 10 phút
+    wsRealtime: true,       // nghe websocket Facebook để biết trước hội thoại nào từ quảng cáo
     topN: 12,
     // đổi selector khi Pancake đổi giao diện: __leadSource.set({selRow:'.abc'})
     selList: '', selRow: '', selName: '', selSnippet: '', selTag: '',
@@ -134,7 +135,9 @@
     // ---------- 0. NGUỒN CẤP HỘI THOẠI (Pancake trả trong response tin nhắn) ----------
     if (attr && attr.ad && attr.ad.length) {
       source = 'ads';
-      evidence.push('Pancake ghi nhận khách bấm quảng cáo · ad_id ' + (attr.adId || attr.ad[0].ad_id || '') +
+      evidence.push((attr.src === 'ws'
+        ? 'Facebook đẩy ad_id của hội thoại qua websocket (biết trước khi dòng hiện ra) · ad_id '
+        : 'Pancake ghi nhận khách bấm quảng cáo · ad_id ') + (attr.adId || attr.ad[0].ad_id || '') +
         (attr.ad[0].post_id ? ' · post_id ' + attr.ad[0].post_id : ''));
     }
 
@@ -307,7 +310,7 @@
   //                 GET  /api/v1/pages/<page>/conversations
   //    - tin nhắn:  GET  /api/v1/pages/<page>/conversations/<id>/messages
   // ======================================================================
-  const VERSION = '3.7.0';
+  const VERSION = '3.8.0';
   const RE_MESSAGES_URL = /\/conversations\/([^/?#]+)\/messages(\?|$)/;
   const RE_API = /\/api\/v1\//;
   const BOOT_AT = Date.now();
@@ -533,6 +536,113 @@
     }
     return _send.apply(this, arguments);
   };
+
+  // ======================================================================
+  // 3bis. NGHE TRƯỚC TỪ WEBSOCKET — nhãn có TRƯỚC khi dòng hiện ra
+  //
+  //  Bằng chứng thật (batmesss.har, khung nhận từ wss://edge-chat.facebook.com/chat):
+  //    khung "deleteThenInsertThread" mang sẵn  entity_id=<psid>  và nhãn
+  //    "name":"ad_id.120251435064020732"
+  //  -> Facebook đẩy psid + ad_id của hội thoại ngay khi khách nhắn, TRƯỚC khi
+  //     Pancake gọi lại danh sách (đo trong HAR: 7/9 hội thoại có dữ liệu tin nhắn
+  //     tới trước lần xuất hiện đầu tiên trong danh sách; sớm hơn 0,3s … 114s).
+  //  Nguyên tắc: chỉ nhận khi khung có ĐÚNG MỘT psid — khung gộp nhiều hội thoại
+  //  thì bỏ, không đoán (đoán là đúng lỗi TN -> QC ngày trước).
+  // ======================================================================
+  function pageIdNow() {
+    const m = /\/pages\/(\d{5,})/.exec(String(location.pathname || '') + ' ' + String(location.href || ''));
+    if (m) return m[1];
+    const keys = Array.from(state.convs.keys());
+    for (let i = 0; i < keys.length; i++) {
+      const p = String(keys[i]).split('_')[0];
+      if (/^\d{5,}$/.test(p)) return p;
+    }
+    return '';
+  }
+
+  /** tách psid + ad_id từ một khung websocket; trả null nếu không chắc chắn */
+  function parseRealtime(text, pageId) {
+    if (!text || text.length > 200000 || text.indexOf('ad_id.') < 0) return null;
+    const psids = [];
+    const ads = [];
+    let m;
+    const reE = /entity_id=(\d{5,})/g;
+    while ((m = reE.exec(text))) {
+      if (pageId && m[1] === pageId) continue;          // entity_id của chính trang
+      if (psids.indexOf(m[1]) < 0) {
+        psids.push(m[1]);
+        if (psids.length > 1) return null;              // khung gộp nhiều hội thoại -> bỏ
+      }
+    }
+    const reA = /ad_id\.(\d{5,})/g;
+    while ((m = reA.exec(text))) if (ads.indexOf(m[1]) < 0) ads.push(m[1]);
+    if (!psids.length || !ads.length || !pageId) return null;
+    return { id: pageId + '_' + psids[0], psid: psids[0], ads: ads, adId: ads[0] };
+  }
+
+  function ingestWsText(text) {
+    if (!CFG.wsRealtime || !text) return;
+    const hit = parseRealtime(text, pageIdNow());
+    if (!hit) return;
+    const prev = state.attr.get(hit.id);
+    if (prev && prev.ad && prev.ad.length) return;      // đã có bằng chứng rồi
+    state.attr.set(hit.id, {
+      ad: hit.ads.map(a => ({ ad_id: a })), post: null, live: false, adId: hit.adId, src: 'ws'
+    });
+    state.wsHits = (state.wsHits || 0) + 1;
+    state.version++;
+    scheduleDecor();
+    schedulePaint();
+    LOG('websocket: hội thoại ' + hit.id + ' là quảng cáo (ad_id ' + hit.adId + ') — biết trước khi dòng hiện ra');
+  }
+
+  function readWsData(data) {
+    try {
+      if (typeof data === 'string') { ingestWsText(data); return; }
+      if (!data) return;
+      // ArrayBuffer / TypedArray / Buffer (kiểm bằng byteLength để không phụ thuộc "realm")
+      if (typeof data.byteLength === 'number') {
+        let text = '';
+        try {
+          text = new TextDecoder('utf-8', { fatal: false }).decode(data);
+        } catch (e) {
+          const arr = (typeof Uint8Array !== 'undefined' && data instanceof Uint8Array)
+            ? data : new Uint8Array(data.buffer || data);
+          for (let i = 0; i < arr.length; i++) text += String.fromCharCode(arr[i]);
+        }
+        ingestWsText(text);
+        return;
+      }
+      if (typeof data.text === 'function') {
+        data.text().then(t => { try { ingestWsText(t); } catch (e) {} }).catch(() => {});
+      }
+    } catch (e) { /* không làm hỏng app */ }
+  }
+
+  (function hookWebSocket() {
+    const Orig = window.WebSocket;
+    if (typeof Orig !== 'function' || Orig.__lsHooked) return;
+    const onMsg = ev => { if (ev && ev.data) readWsData(ev.data); };
+    const attach = (ws, url) => {
+      try {
+        if (!/facebook\.com|\/chat|lightspeed/i.test(String(url || ''))) return;
+        ws.addEventListener('message', onMsg);
+      } catch (e) { /* ignore */ }
+    };
+    const Wrapped = new Proxy(Orig, {
+      construct(target, args, newTarget) {
+        const ws = Reflect.construct(target, args, newTarget === Wrapped ? target : newTarget);
+        try { attach(ws, args[0]); } catch (e) { /* ignore */ }
+        return ws;
+      }
+    });
+    try { Wrapped.__lsHooked = true; } catch (e) { /* ignore */ }
+    try {
+      Object.defineProperty(window, 'WebSocket', { value: Wrapped, configurable: true, writable: true });
+    } catch (e) {
+      try { window.WebSocket = Wrapped; } catch (e2) { /* bó tay */ }
+    }
+  })();
 
   // ======================================================================
   // 4. POLL + ENRICH (chỉ cho hội thoại đang hiển thị)
@@ -1476,6 +1586,7 @@
         running: !!(loops.scan || loops.poll),
         decorateMs: dom.ms || 0,
         enrichFail: state.enrichFail || 0,
+        wsHits: state.wsHits || 0,
         enrichLast: state.enrichDbg || null,
         idFromWrapper: dom.idFromWrapper,
         rowHasOwnId: !!(sample && selfConvId(sample)),

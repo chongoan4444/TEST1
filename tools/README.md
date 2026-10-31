@@ -326,3 +326,32 @@ trang tin mới nhất, không cần cuộn lên.
 | Bộ nhớ đệm nguồn | — | giới hạn 600 hội thoại |
 
 Đo trên fixture DOM thật 31 dòng: nhãn đầu tiên sau **~0,55 giây**, mỗi lượt gắn nhãn **3–5 ms**.
+
+### 📡 Biết trước khi dòng hiện ra — websocket (3.8.0)
+
+Câu hỏi: *"có gì chứng minh tin nhắn tới TRƯỚC khi hội thoại hiện trên danh sách không?"*
+Có. Trong `batmesss.har` có **1 kết nối websocket thật** tới `wss://edge-chat.facebook.com/chat`
+(118 khung). Khung `deleteThenInsertThread` mang sẵn:
+
+```
+entity_id=61594409994701                 <- psid khách
+"name","ad_id.120251435064020732"        <- nhãn quảng cáo Facebook gắn cho hội thoại
+"đắt cái áo mà 10 ngày chưa có"          <- nội dung tin mới
+```
+
+Đo trên chính HAR đó: **7/9** hội thoại có dữ liệu tin nhắn tới **trước** lần xuất hiện đầu tiên
+trong danh sách (sớm hơn 0,3 giây … 114 giây). Nói cách khác: Pancake/Facebook đã biết khách đến
+từ quảng cáo nào **trước** khi dòng chat kịp vẽ ra.
+
+Từ 3.8.0 script nghe chính khung đó:
+
+| Việc | Cách làm |
+|---|---|
+| Nhận tin trước | hook `WebSocket` (giữ nguyên hành vi của trang), đọc khung có `ad_id.` |
+| Ghép với hội thoại | `entity_id=<psid>` + page id trên URL → `<page_id>_<psid>` |
+| Chống đoán bừa | khung có **nhiều hơn 1 psid** (khung gộp) → bỏ; không có `ad_id` → bỏ |
+| Tắt khi cần | `__leadSource.set({wsRealtime:false})` |
+
+Kết quả: nhãn **QC** có thể hiện ngay khi dòng vừa xuất hiện, không phải chờ gọi API tin nhắn.
+Đọc thêm tin nhắn vẫn giữ nguyên (để nhận BV/LV và xác nhận lại).
+Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi thứ tự quay về như 3.7.0, không lỗi.
