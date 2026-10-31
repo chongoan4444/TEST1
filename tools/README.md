@@ -358,21 +358,19 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.4.0**.
+Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.5.0** (ưu tiên tốc độ).
 
-### Endpoint danh sách THẬT (lý do bản 1.3.0 “không hoạt động”)
+### Ba đường bắt tin — đường nào tới trước thì dùng
 
-| Bản ghi | Request | Ghi chú |
+| Đường | Độ trễ thực tế | Ghi chú |
 |---|---|---|
-| `tinnhanmoi.har` | `POST /api/v1/conversations?pages[…]=0&unread_first=true&mode=OR&tags=[…]` (body multipart `type=ALL,UNREAD`) | app hiện tại dùng cái này |
-| `loaddanhsach.har` | `GET /api/v1/pages/<page_id>/conversations?current_count=40&next_cursor=…` | khi cuộn danh sách |
+| websocket `insertMessage` | **trước khi dòng hiện** | chỉ có khi socket Facebook đẩy tin; không phải lúc nào cũng có |
+| dòng trên màn hình vừa đổi → gọi lại danh sách NGAY | **~0,15 – 0,5 giây** | bật mặc định (`domTrigger:true`) |
+| tự gọi lại danh sách | **≤ 2 giây** | `pollMs: 2000`, chỉ khi tab đang xem |
 
-Bản 1.3.0 chỉ nghe `/api/v1/pages/<id>/conversations` → **bỏ lỡ hoàn toàn** request
-`POST /api/v1/conversations`. Cùng lúc đó, trong `tinnhanmoi.har` (59 khung websocket)
-**không có khung `insertMessage` nào** — nên cả hai đường đều im lặng.
-
-Từ 1.4.0: nghe cả hai endpoint, ghi nhớ **url + method + body** rồi tự gọi lại mỗi 8 giây
-(chỉ khi tab đang xem), so `snippet` / `updated_at` để phát hiện tin mới.
+Bản 1.4.0 quét 8 giây nên “tin hiện ra rồi mới báo”. Nay: dòng vừa đổi là gọi lại API ngay
+(150 ms), lấy `last_sent_by` để biết **đúng chiều**, rồi báo — trong bảng ghi rõ độ trễ,
+ví dụ `báo sau dòng 0,2s`, còn tin qua websocket ghi `báo TRƯỚC khi dòng hiện`.
 
 ### Xác định CHIỀU tin
 
@@ -381,32 +379,32 @@ Từ 1.4.0: nghe cả hai endpoint, ghi nhớ **url + method + body** rồi tự
 | Khung `insertMessage` | `…,"<mid.…>","<id>",[19,"<SENDER ID>"]` | `= psid` → tin khách · `= page id` → tin shop |
 | API danh sách | `last_sent_by` (object) | `id = from_psid` → tin khách · `id = page_id` → tin shop |
 | Khung `deleteThenInsertThread` | không có sender | chưa rõ chiều → **không báo** |
-| Giao diện | không có trường chiều (snippet Pancake **không** có tiền tố “Bạn:”) | mặc định tắt |
+| Giao diện | không có trường chiều | chỉ **kích hoạt** gọi API, không tự báo |
 
-### Nhật ký trong bảng (nút 🔍)
+### Endpoint danh sách (đã kiểm trong HAR)
+
+- `POST /api/v1/conversations?pages[…]=0&unread_first=true&mode=OR` (body `type=ALL,UNREAD`) — `tinnhanmoi.har`
+- `GET /api/v1/pages/<page_id>/conversations?current_count=40&next_cursor=…` — `loaddanhsach.har`
+
+Script ghi nhớ **url + method + body** của request gặp được rồi tự gọi lại; bỏ `content-type`
+khi gửi lại FormData để trình duyệt tự sinh boundary.
+
+### Bảng + chẩn đoán
 
 ```
+WS 1 socket · 12 tin · DS 6 lần (10:22:30) · bỏ 7 tin shop · Tên 300
+
 10:22:41 📥 Ngọc Ánh · Còn size M không shop
 10:22:38 ⏭ bỏ tin shop · Dạ em gửi bảng size ngay ạ
 10:22:20 🔄 danh sách: 20 hội thoại
 ```
 
-Dòng trạng thái: `WS 1 socket · 12 tin · DS 6 lần (10:22:30) · bỏ 7 tin shop · Tên 300`
-
-| Nút | Việc |
-|---|---|
-| 📨 | ẩn/hiện bảng |
-| chỉ tin tới | lọc tin khách (tắt để xem cả tin shop) |
-| 🔔 | thông báo hệ thống |
-| 🧪 | tin thử |
-| 🔍 | chẩn đoán + nhật ký |
-| 🧹 | xoá danh sách |
-
 ```js
-__radar.debug()      // trạng thái + diag
-__radar.poll()       // gọi lại danh sách ngay
-__radar.set({pollMs:5000})   // nhanh hơn (mặc định 8000)
+__radar.debug()              // trạng thái + chẩn đoán + nhật ký
+__radar.poll()               // gọi lại danh sách ngay
+__radar.set({pollMs:1500})   // nhanh hơn (mặc định 2000)
+__radar.set({domTrigger:false})  // tắt kích hoạt theo giao diện
 ```
 
-Kiểm thử: `node tools/test_radar.js` — 33 mục (khung thật #28 khách / #37 shop / #33 hội thoại /
-#88 gộp, endpoint thật `POST /api/v1/conversations`, tự gọi lại và phát hiện tin mới).
+Kiểm thử: `node tools/test_radar.js` — 34 mục, gồm khung thật #28/#37/#33/#88, endpoint thật
+`POST /api/v1/conversations`, kích hoạt theo giao diện (đo được ~0,15 giây) và tự gọi lại.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.4.0
+// @version      1.5.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.4.0';
+  const VERSION = '1.5.0';
 
   const DEFAULTS = {
     on: true,
@@ -40,7 +40,9 @@
     allowUnknown: false,     // false = không báo tin không xác định được chiều
     max: 8,
     notify: false,
-    pollMs: 8000,            // tự gọi lại danh sách (chỉ khi tab đang xem)
+    pollMs: 2000,            // tự gọi lại danh sách (chỉ khi tab đang xem)
+    pollMinGap: 1200,        // không gọi lại dày hơn mức này
+    domTrigger: true,        // dòng trên màn hình vừa đổi -> gọi lại danh sách NGAY (lấy chiều tin)
     watchList: true,         // dự phòng bằng API danh sách (chiều chính xác)
     watchDom: false          // theo dõi giao diện: KHÔNG biết chiều -> mặc định tắt
   };
@@ -310,7 +312,8 @@
       if (state.seeded && prev && (prev.updated_at !== updated || prev.snippet !== snippet) && snippet) {
         let outgoing = null;
         if (sbId && psid) outgoing = (sbId === psid) ? false : (pageId && sbId === pageId ? true : null);
-        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list' });
+        const lag = state.lastChangeAt && (Date.now() - state.lastChangeAt < 15000) ? (Date.now() - state.lastChangeAt) : 0;
+        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag });
       }
     });
 
@@ -397,11 +400,12 @@
     return h;
   }
 
-  function pollList() {
+  function pollList(force) {
     const r = state.listReq;
     if (!CFG.on || !CFG.watchList || !r) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    if (Date.now() - (r.lastPoll || 0) < Math.max(3000, Number(CFG.pollMs) || 10000)) return;
+    const gap = force ? Math.max(600, Number(CFG.pollMinGap) || 1200) : Math.max(1000, Number(CFG.pollMs) || 2000);
+    if (Date.now() - (r.lastPoll || 0) < gap) return;
     r.lastPoll = Date.now();
     const opt = { method: r.method, credentials: 'include' };
     const h = safeHeaders(r.headers, r.body);
@@ -442,7 +446,7 @@
   }
 
   function scanDom() {
-    if (!CFG.on || !CFG.watchDom || !document.body) return;
+    if (!CFG.on || !(CFG.watchDom || CFG.domTrigger) || !document.body) return;
     const list = rows();
     for (let i = 0; i < list.length; i++) {
       const el = list[i];
@@ -460,6 +464,13 @@
       if (snip && snip !== prev) {
         state.domSnap.set(id, snip);
         if (!state.domReady) continue;
+        // dòng vừa đổi: gọi lại danh sách NGAY để biết chiều tin (last_sent_by) — nhanh hơn chờ 2 giây
+        if (CFG.domTrigger) {
+          state.lastChangeAt = Date.now();
+          if (state.__pollTimer) clearTimeout(state.__pollTimer);
+          state.__pollTimer = setTimeout(() => { state.__pollTimer = 0; pollList(true); }, 150);
+        }
+        if (!CFG.watchDom) continue;   // không tự báo vì giao diện không cho biết chiều
         const outPrefix = /^Bạn\s*:|^Bạn\s+đã\s+|^You\s*:/i.test(snip);
         route({ psid, snippet: snip, avatar: '', ads: [], at: Date.now(), sender: '', outgoing: outPrefix, dirKnown: outPrefix, kind: 'dom' }, 'giao diện');
       }
@@ -469,7 +480,7 @@
   }
 
   function watchDom() {
-    if (!CFG.watchDom || typeof MutationObserver === 'undefined') return;
+    if (!(CFG.watchDom || CFG.domTrigger) || typeof MutationObserver === 'undefined') return;
     const tryAttach = () => {
       const list = document.querySelector('.conversation-list');
       if (!list) return false;
@@ -518,7 +529,8 @@
       at: hit.at || Date.now(),
       posNow: pos.pos,
       dirKnown: !!hit.dirKnown,
-      sender: hit.sender || ''
+      sender: hit.sender || '',
+      lag: hit.lag || 0
     };
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
@@ -655,7 +667,8 @@
           '<span class="__rd_time">' + timeStr(it.at) + '</span></div>' +
           '<div class="__rd_snip">' + esc(it.snippet) + '</div>' +
           (it.ads && it.ads.length ? '<div class="__rd_ad">🔥 quảng cáo · ad_id ' + esc(it.ads[0]) + '</div>' : '') +
-          '<div class="__rd_via">chiều: ' + (it.dirKnown ? 'khách → shop' : 'chưa rõ') + ' · nguồn: ' + esc(VIA_TEXT[it.via] || it.via) + '</div>' +
+          '<div class="__rd_via">chiều: ' + (it.dirKnown ? 'khách → shop' : 'chưa rõ') + ' · ' +
+            (it.via === 'websocket' ? 'báo TRƯỚC khi dòng hiện' : (it.lag ? 'báo sau dòng ' + (it.lag / 1000).toFixed(1) + 's' : 'nguồn: ' + esc(VIA_TEXT[it.via] || it.via))) + '</div>' +
           '</div></div>';
       }).join('');
     }
@@ -747,7 +760,7 @@
     poll: () => {
       if (!state.listReq) return null;
       state.listReq.lastPoll = 0;
-      pollList();
+      pollList(true);
       return { url: state.listReq.url, method: state.listReq.method, hasBody: state.listReq.body != null };
     },
     feed(b64) { try { readWsData(typeof b64 === 'string' ? atob(b64) : b64); } catch (e) { state.diag.lastErr = 'feed: ' + e.message; return false; } return true; },
@@ -767,10 +780,10 @@
     else go();
     window.addEventListener('load', go);
 
-    setInterval(() => { if (CFG.on) pollList(); }, Math.max(5000, Number(CFG.pollMs) || 10000));
+    setInterval(() => { if (CFG.on) pollList(); }, Math.max(1000, Number(CFG.pollMs) || 2000));
     setInterval(() => {
       if (!CFG.on) return;
-      try { if (CFG.watchDom) scanDom(); } catch (e) { /* ignore */ }
+      try { if (CFG.watchDom || CFG.domTrigger) scanDom(); } catch (e) { /* ignore */ }
       if (state.items.length) render();
     }, 4000);
   })();

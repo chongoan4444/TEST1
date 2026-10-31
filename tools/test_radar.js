@@ -190,19 +190,26 @@ const diag = () => window.__radar.debug().diag;
   check(!!viaList && viaList.name === 'Khách Khác', 'đúng tên (' + (viaList && viaList.name) + ')');
   check(!!viaList && viaList.dirKnown === true, 'chiều tin xác định từ last_sent_by');
 
-  // ---- 7. giao diện: mặc định TẮT nên không báo
+  // ---- 7. giao diện: KHÔNG tự báo (không biết chiều) nhưng phải KÍCH HOẠT gọi lại danh sách ngay
   const before = items().length;
-  doc.getElementById(CONV + '__0').querySelector('.snippet-text').textContent = 'Còn size L không shop';
-  await sleep(800);
-  check(items().length === before, 'theo dõi giao diện mặc định TẮT (không biết chiều)');
+  const pollsBefore = window.__radar.debug().diag.polls || 0;
+  window.__convs[0].snippet = 'Còn size L không shop';
+  window.__convs[0].updated_at = '2026-10-31T03:55:00Z';
+  doc.getElementById(OTHER + '__0').querySelector('.snippet-text').textContent = 'Còn size L không shop';
+  await sleep(900);   // mutation -> tự gọi lại danh sách (~150ms) -> nhận tin (~300ms)
+  const lagItem = items()[0];
+  check(items().length === before + 1, 'dòng vừa đổi -> tự gọi danh sách ngay và báo trong ~1 giây');
+  check(!!lagItem && lagItem.lag > 0, 'ghi lại độ trễ so với lúc dòng đổi (' + (lagItem && lagItem.lag) + 'ms)');
+  check((window.__radar.debug().diag.polls || 0) > pollsBefore, 'có thêm lần tự gọi lại danh sách');
 
   // ---- 8. khung tin nhắn tổng hợp: khách -> báo, shop -> không
+  const base2 = items().length;
   window.__ws.dispatch('message', window.__msgFrame(PSID, 'Cho mình xin địa chỉ shop', true));
-  await sleep(200);
-  check(items().length === before + 1, 'khung tổng hợp: tin khách được báo');
+  await sleep(250);
+  check(items().length === base2 + 1, 'khung tổng hợp: tin khách được báo');
   window.__ws.dispatch('message', window.__msgFrame(PSID, 'Dạ shop ở Hà Nội ạ', false));
-  await sleep(200);
-  check(items().length === before + 1, 'khung tổng hợp: tin shop không báo');
+  await sleep(250);
+  check(items().length === base2 + 1, 'khung tổng hợp: tin shop không báo');
 
   // ---- 9. nút 🧪 + 🔍
   Array.from(doc.querySelectorAll('[data-a="test"]'))[0].click();
