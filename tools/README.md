@@ -1,3 +1,11 @@
+## Radar 2.3.0 — chỉ hiển thị tin khách chưa gắn thẻ
+
+Mặc định `onlyUntagged: true`. Bộ lọc chạy trước khi đưa tin vào bảng/phát thông báo trên mọi nguồn: chỉ nhận khi hội thoại có `tags` là mảng rỗng. Có thẻ (kể cả mã âm) hoặc chưa biết thẻ đều không báo. Không dựa vào tên nguồn NO_TAG. Tin thử 🧪 vẫn được phép để thử giao diện.
+
+Khi API/socket cập nhật hội thoại thành đã có thẻ, loại tin của hội thoại đó khỏi bảng. Vẫn tiếp tục thu thập dữ liệu để biết chiều tin và trạng thái thẻ, không ngắt socket. 🔍 có bộ đếm bỏ tin có thẻ/chưa rõ thẻ.
+
+Kiểm thử bổ sung: mặc định bật lọc; socket có thẻ; thiếu trường tags; mảng rỗng; gắn thẻ sau khi đã báo. Các ca hồi quy đường nhận tin cũ chạy ở chế độ mọi thẻ để không mất kiểm tra các bộ phân tích cũ.
+
 ## Radar 2.2.0 — đường socket nhanh và đo từng tin
 
 - `pages:update_conversation` gọi xác minh riêng trang ngay, bỏ debounce 80 ms chung vốn có thể để khung trang B huỷ việc xác minh trang A.

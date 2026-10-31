@@ -172,6 +172,8 @@ const diag = () => window.__radar.debug().diag;
 
   await sleep(400);
   check(!!window.__radar, 'script nạp được');
+  check(window.__radar.cfg.onlyUntagged === true, 'mặc định chỉ tin chưa gắn thẻ');
+  window.__radar.set({onlyUntagged:false});
   check(diag().hook === true, 'hook WebSocket đã treo');
 
   // nạp danh sách để biết tên
@@ -501,6 +503,26 @@ const diag = () => window.__radar.debug().diag;
   check(timed && timed.timingStatus === 'before-dom' && timed.leadMs >= 0,
     'DOM đến sau -> ghi số ms đo được');
   check(timed && timed.convId === PAGE + '_333222111', 'giữ đúng mã trang/hội thoại khi đo');
+
+  // ---- 22. bộ lọc chưa gắn thẻ dùng dữ liệu thật của hội thoại
+  window.__radar.clear();
+  window.__radar.set({onlyUntagged:true});
+  const sendTags = async (suffix, tags, text) => {
+    const cv = {id: PAGE + '_' + suffix, page_id: PAGE, from_psid:suffix,
+      snippet:text, updated_at:new Date().toISOString(),
+      last_sent_by:{id:suffix}, customers:[{name:'Khách lọc', fb_id:suffix}]};
+    if (tags !== undefined) cv.tags = tags;
+    ws2.dispatch('message', JSON.stringify([null, null, 'multiple_pages:test', 'pages:update_conversation', {page_id:PAGE, conversation:cv}]));
+    await sleep(40);
+  };
+  await sendTags('999111222', [9], 'Có thẻ không báo');
+  check(items().length === 0, 'socket có thẻ -> không hiển thị');
+  await sendTags('999111223', undefined, 'Thiếu tags không đoán');
+  check(items().length === 0, 'thiếu tags -> không hiển thị');
+  await sendTags('999111224', [], 'Chưa gắn thẻ được báo');
+  check(items().length === 1 && items()[0].untagged, 'tags rỗng -> hiển thị đúng tin');
+  await sendTags('999111224', [3], 'Chưa gắn thẻ được báo');
+  check(!items().some(it => it.convId === PAGE + '_999111224'), 'gắn thẻ sau đó -> loại khỏi bảng');
 
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');

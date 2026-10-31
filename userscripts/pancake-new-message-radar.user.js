@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.2.0
+// @version      2.3.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,11 +31,12 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.2.0';
+  const VERSION = '2.3.0';
 
   const DEFAULTS = {
     on: true,
     panel: true,
+    onlyUntagged: true,      // chỉ báo khi tags thực sự là mảng rỗng
     onlyIncoming: true,      // chỉ báo tin khách gửi tới
     allowUnknown: false,     // false = không báo tin không xác định được chiều
     max: 8,
@@ -404,6 +405,16 @@
         return;
       }
     }
+    if (CFG.onlyUntagged && via !== 'thử') {
+      const id = hit.convId || (state.people.get(hit.psid) || {}).convId;
+      const known = id && state.convs.get(id);
+      const confirmed = typeof hit.untagged === 'boolean' ? hit.untagged : known && known.untagged;
+      if (confirmed !== true) {
+        state.diag.skippedTagged = (state.diag.skippedTagged || 0) + 1;
+        return;
+      }
+      hit.untagged = true;
+    }
     if (via === 'websocket') state.wsHits++;
     if (via === 'giao diện') state.domHits++;
     publish(hit, via);
@@ -486,7 +497,10 @@
       const sb = cv.last_sent_by;
       const sbId = (sb && typeof sb === 'object') ? String(sb.id || sb.admin_id || '') : '';
       const prev = state.convs.get(id);
-      state.convs.set(id, { psid, name, snippet, updated_at: updated, lastSentById: sbId });
+      state.convs.set(id, { psid, name, snippet, updated_at: updated, lastSentById: sbId, untagged: untaggedConv });
+      if (CFG.onlyUntagged && !untaggedConv) {
+        state.items = state.items.filter(it => it.convId !== id);
+      }
       if (psid && name) state.people.set(psid, { name, convId: id, avatar: avatar || (state.people.get(psid) || {}).avatar || '' });
 
       // hội thoại MỚI (chưa từng thấy) cũng là tin mới — nhưng chỉ báo khi cập nhật gần đây,
@@ -1170,7 +1184,7 @@
       ' · Tên ' + state.people.size + ' · nguồn ' + srcName;
 
     const head = '<div class="__rd_head">' +
-      '<div class="__rd_hrow"><b>📨 Tin khách gửi tới</b><span class="__rd_ver">v' + VERSION + '</span><span class="sp"></span>' +
+      '<div class="__rd_hrow"><b>📨 Tin khách chưa gắn thẻ</b><span class="__rd_ver">v' + VERSION + '</span><span class="sp"></span>' +
       '<button data-a="in" class="' + (CFG.onlyIncoming ? 'on' : '') + '" title="Chỉ báo tin của khách">chỉ tin tới</button>' +
       '<button data-a="notify" class="' + (CFG.notify ? 'on' : '') + '" title="Thông báo hệ thống">🔔</button>' +
       '<button data-a="test" title="Bắn một tin thử">🧪</button>' +
@@ -1279,6 +1293,7 @@
       'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
       'chưa gắn tag: hỏi ' + (d.untaggedPolls || 0) + ' lần · lỗi ' + (d.untaggedErr || 0) + ' · ' + (d.untaggedConvs || 0) + ' hội thoại chưa gắn tag đã thấy',
       'đo từng tin (DOM, không phải thời điểm paint): ' + JSON.stringify(state.items.slice(0, 8).map(it => ({convId: it.convId, status: it.timingStatus, socketToAlertMs: it.patchToAlertMs, leadMs: it.leadMs}))),
+      'lọc chỉ chưa gắn thẻ: ' + (CFG.onlyUntagged ? 'bật' : 'tắt') + ' · bỏ có thẻ/chưa rõ thẻ: ' + (d.skippedTagged || 0),
       'khung cập nhật hội thoại: ' + (d.convPatches || 0) + ' · có người gửi: ' + (d.patchWithSender || 0) + ' · có nội dung: ' + (d.patchWithSnippet || 0),
       'khoá trong khung gần nhất: ' + (d.patchKeys || '—'),
       'nhịp quét đã chạy: ' + (d.ticks || 0) + ' lần',

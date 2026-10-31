@@ -112,6 +112,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(800);                     // chờ script khởi động trên DOM thật
 
   check(!!w.__radar, 'script chạy được trên DOM thật của Pancake (v' + (w.__radar && w.__radar.version) + ')');
+  w.__radar.set({onlyUntagged:false}); // các ca hồi quy kiểm tra đường nhận mọi loại tin
   check(w.document.querySelectorAll('.conversation-list-item').length >= 10,
     'thấy danh sách hội thoại thật (' + w.document.querySelectorAll('.conversation-list-item').length + ' dòng)');
   check(!!w.document.querySelector('.__rd_fab'), 'có nút 📨 trên màn hình');
