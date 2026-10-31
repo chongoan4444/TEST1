@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.8.0
+// @version      1.9.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.8.0';
+  const VERSION = '1.9.0';
 
   const DEFAULTS = {
     on: true,
@@ -81,6 +81,7 @@
       pageTriggers: 0, pagePolls: 0, pageFail: 0, xhrHits: 0, defaultPolls: 0,
       pollOk: 0, pollBad: 0, pollJsonErr: 0, hiddenSkips: 0,
       phxTopics: {}, phxEvents: {}, rawFrames: [], jsonFrames: 0,
+      convPatches: 0, patchWithSender: 0, patchWithSnippet: 0, patchKeys: '', ticks: 0,
       msgFrames: 0, threadFrames: 0, parsed: 0,
       skippedOut: 0, skippedUnknown: 0, lastFrameAt: 0, lastErr: '', lastSender: ''
     }
@@ -222,7 +223,7 @@
     const raw = String(text == null ? '' : text);
     try {
       const rf = state.diag.rawFrames;
-      rf.unshift(raw.slice(0, 240));
+      rf.unshift(raw.slice(0, 1500));
       if (rf.length > 3) rf.length = 3;
     } catch (e) { /* ignore */ }
 
@@ -260,6 +261,7 @@
       d.phxTopics[topic] = (d.phxTopics[topic] || 0) + 1;
       d.phxEvents[event] = (d.phxEvents[event] || 0) + 1;
       if (/^(phx_reply|phx_error|phx_close|presence_diff|presence_state)$/i.test(event)) return;
+      if (event === 'pages:update_conversation') { onConversationPatch(payload, pageId); return; }
       deepScan(payload, 0, pageId);
       try { render(); } catch (e) { /* ignore */ }
       return;
@@ -277,6 +279,51 @@
     if (!isNaN(t)) return t;
     const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/.exec(str);
     return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : 0;
+  }
+
+  /**
+   * Khung `pages:update_conversation` của socket Pancake (đọc từ bảng chẩn đoán thật):
+   *   ["7",null,"multiple_pages:<uid>","pages:update_conversation",
+   *    {"page_id":"769625892902516","conversation":{"id":"769625892902516_2890…","type":"INBOX","tags":[…],"seen":true,…}}]
+   * Khung này tới TRƯỚC khi React vẽ lại dòng, nên đây là đường "báo trước".
+   *  • nếu khung có đủ snippet + last_sent_by  -> báo ngay (biết chắc chiều tin)
+   *  • nếu khung chỉ là bản vá thiếu dữ liệu  -> gọi riêng trang đó ngay (150 ms) để lấy bản chuẩn
+   */
+  function onConversationPatch(payload, pageId) {
+    const d = state.diag;
+    if (!payload || typeof payload !== 'object') return;
+    const cv = payload.conversation || payload.conv || payload.thread || null;
+    if (!cv || typeof cv !== 'object') { deepScan(payload, 0, pageId); return; }
+
+    d.convPatches = (d.convPatches || 0) + 1;
+    const keys = Object.keys(cv);
+    if (keys.length) d.patchKeys = keys.join(',').slice(0, 400);
+    const id = String(cv.id || '');
+    const pid = String(payload.page_id || cv.page_id || (id.indexOf('_') > 0 ? id.split('_')[0] : pageId || ''));
+    const hasSender = !!(cv.last_sent_by && (cv.last_sent_by.id != null || cv.last_sent_by.name));
+    const hasSnippet = cv.snippet != null || cv.last_message != null;
+    if (hasSender) d.patchWithSender = (d.patchWithSender || 0) + 1;
+    if (hasSnippet) d.patchWithSnippet = (d.patchWithSnippet || 0) + 1;
+
+    if (id && hasSnippet) {
+      const known = state.convs.get(id) || {};
+      const patch = {
+        id: id,
+        page_id: pid,
+        from_psid: cv.from_psid || known.psid || (id.indexOf('_') > 0 ? id.split('_')[1] : ''),
+        snippet: cv.snippet != null ? cv.snippet : cv.last_message,
+        updated_at: cv.updated_at || cv.updatedAt || '',
+        last_sent_by: cv.last_sent_by || null,
+        customers: cv.customers || null
+      };
+      if (hasSender) ingestList({ conversations: [patch] }, true, true, 'websocket');
+      else if (patch.last_sent_by) ingestList({ conversations: [patch] }, true, true, 'websocket');
+    }
+    // dù khung đủ hay thiếu: đẩy nhanh dữ liệu chuẩn của trang (last_sent_by chính xác)
+    if (pid && /^\d{5,}$/.test(pid)) {
+      if (state.__patchTimer) clearTimeout(state.__patchTimer);
+      state.__patchTimer = setTimeout(() => { state.__patchTimer = 0; try { targetPagePoll(pid, true); } catch (e) { /* ignore */ } }, 150);
+    }
   }
 
   /** dò trong payload: đối tượng nào giống hội thoại thì đưa vào ingestList, giống tin nhắn thì báo */
@@ -394,7 +441,7 @@
     return false;
   }
 
-  function ingestList(json, fromPage, quiet) {
+  function ingestList(json, fromPage, quiet, viaName) {
     if (!json || typeof json !== 'object') return;
     const arr = json.conversations || json.data || [];
     if (!Array.isArray(arr) || !arr.length) return;
@@ -435,7 +482,7 @@
     });
 
     if (!state.seeded) { state.seeded = true; watchPageCounts(json); if (!quiet) render(); return; }
-    if (CFG.watchList) fresh.forEach(f => route(f, 'danh sách'));
+    if (CFG.watchList) fresh.forEach(f => route(f, viaName || 'danh sách'));
     if (!fromPage && !quiet) watchPageCounts(json);
     if (!quiet) render();
   }
@@ -464,10 +511,11 @@
   }
 
   /** gọi danh sách riêng của một trang (endpoint GET có thật trong loaddanhsach.har) */
-  function targetPagePoll(pageId) {
+  function targetPagePoll(pageId, urgent) {
     if (state.pagePollFail >= 2) return;
     const now = Date.now();
-    if (now - (state.pagePollAt[pageId] || 0) < 3000) return;
+    const gapPage = urgent ? 1500 : 3000;
+    if (now - (state.pagePollAt[pageId] || 0) < gapPage) return;
     state.pagePollAt[pageId] = now;
     const url = '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations?current_count=40&unread_first=true&mode=OR&except_tags=[]&from_platform=web';
     state.diag.pagePolls++;
@@ -1044,6 +1092,9 @@
       'trang có tin mới: ' + d.pageTriggers + ' · gọi riêng trang: ' + d.pagePolls + ' (lỗi ' + d.pageFail + ')',
       'dòng trong danh sách: ' + rows().length,
       'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
+      'khung cập nhật hội thoại: ' + (d.convPatches || 0) + ' · có người gửi: ' + (d.patchWithSender || 0) + ' · có nội dung: ' + (d.patchWithSnippet || 0),
+      'khoá trong khung gần nhất: ' + (d.patchKeys || '—'),
+      'nhịp quét đã chạy: ' + (d.ticks || 0) + ' lần',
       'gọi lại: thành công ' + (d.pollOk || 0) + ' · HTTP lỗi ' + (d.pollBad || 0) + ' · JSON lỗi ' + (d.pollJsonErr || 0) + ' · bỏ vì quá sát nhịp ' + (d.pollSkips || 0) + ' · tab ẩn ' + (d.hiddenSkips || 0),
       'nguồn request: ' + (state.listReq ? ((state.listReq.fromXhr ? 'XMLHttpRequest' : 'fetch') + ' ' + state.listReq.method + ' — ' + String(state.listReq.url).slice(0, 100)) : 'chưa học được (sẽ tự dựng)'),
       'XHR thấy: ' + (d.xhrHits || 0) + ' · body học được: ' + (state.listReq && state.listReq.body != null ? 'có' : 'chưa') + ' · tự dựng: ' + (d.defaultPolls || 0),
@@ -1120,7 +1171,10 @@
       } catch (e) { /* ignore */ }
     }, 3000);
 
-    setInterval(() => { if (CFG.on) pollList(); }, Math.max(1000, Number(CFG.pollMs) || 2000));
+    setInterval(() => {
+      state.diag.ticks = (state.diag.ticks || 0) + 1;
+      if (CFG.on) pollList();
+    }, Math.max(1000, Number(CFG.pollMs) || 2000));
 
     // nhịp tim: chứng minh radar còn thức và cho biết 30 giây qua nó làm được gì
     const hb = { listHits: 0, polls: 0, frames: 0, skippedOut: 0 };

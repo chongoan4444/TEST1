@@ -392,6 +392,37 @@ const diag = () => window.__radar.debug().diag;
   await sleep(200);
   check(!items().some(i => i.snippet === 'Tin cũ từ hai giờ trước'), 'tin cũ đẩy lên khi mở hội thoại -> không báo');
 
+  // ---- 18. khung pages:update_conversation (đường "báo trước" của socket Pancake)
+  const base5 = items().length;
+  const convPatch = {
+    id: PAGE + '_888777666', page_id: PAGE,
+    customers: [{ id: 'u8', fb_id: '888777666', name: 'Khách Socket' }],
+    snippet: 'Em chốt đơn nha', updated_at: new Date().toISOString(),
+    last_sent_by: { id: '888777666', name: 'Khách Socket' }
+  };
+  ws2.dispatch('message', JSON.stringify([null, '9', 'multiple_pages:u1', 'pages:update_conversation',
+    { page_id: PAGE, conversation: convPatch }]));
+  await sleep(250);
+  check(items().length === base5 + 1, 'pages:update_conversation đủ dữ liệu -> báo NGAY (không chờ danh sách)');
+  check(diag().convPatches >= 1 && diag().patchWithSender >= 1, 'chẩn đoán đếm được khung cập nhật hội thoại');
+
+  // khung chỉ là bản vá (thiếu last_sent_by) -> không đoán, nhưng phải gọi riêng trang ngay
+  await sleep(1700);                       // chờ hết chặn 1,5 giây/trang của lần gọi trước
+  const pagePollsBefore = diag().pagePolls;
+  window.__pageOverride = [{
+    id: PAGE + '_777111222', page_id: PAGE, from_psid: '777111222',
+    customers: [{ id: 'u7', fb_id: '777111222', name: 'Khách Vá' }],
+    snippet: 'Còn hàng không shop', updated_at: new Date().toISOString(),
+    last_sent_by: { id: '777111222', name: 'Khách Vá' }
+  }];
+  ws2.dispatch('message', JSON.stringify([null, '10', 'multiple_pages:u1', 'pages:update_conversation',
+    { page_id: PAGE, conversation: { id: PAGE + '_777111222', type: 'INBOX', tags: [1], seen: false } }]));
+  await sleep(700);
+  check(String(diag().patchKeys).indexOf('id') === 0, 'ghi lại khoá của khung để chẩn đoán (' + diag().patchKeys + ')');
+  check(diag().pagePolls === pagePollsBefore + 1, 'khung thiếu dữ liệu -> gọi riêng trang ngay');
+  check(items().some(i => i.name === 'Khách Vá'), 'gọi riêng trang -> báo đúng khách');
+  window.__pageOverride = null;
+
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
   check(window.__pageMsg >= 6, 'listener của trang vẫn nhận đủ khung (' + window.__pageMsg + ')');

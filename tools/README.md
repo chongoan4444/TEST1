@@ -358,7 +358,44 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.8.0** (không sót tin + không chậm + nghe đúng socket của Pancake).
+Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.9.0** (báo ngay từ khung socket, trước khi Pancake vẽ lại dòng).
+
+### 1.9.0 — báo TRƯỚC khi dòng hiện: dùng đúng khung socket của Pancake
+
+Sau 1.8.0, bảng 🔍 trên `/multi_pages` đã cho thấy socket thật:
+
+```
+khung nhận: 403 · khung JSON: 403
+socket topics: users:… · multiple_pages:… (400)
+socket events: phx_reply (2) · online_status · pages:tag_conversations (56)
+               pages:update_conversation (332) · pages:seen_conversation (10)
+khung thô:
+  ["7",null,"multiple_pages:<uid>","pages:update_conversation",
+   {"page_id":"769625892902516","conversation":{"id":"769625892902516_2890…","type":"INBOX","tags":[…],"seen":true,…}}]
+```
+
+Nghĩa là kênh thời gian thực có thật, tên sự kiện là **`pages:update_conversation`**, và nó tới
+**trước** khi React vẽ lại dòng — đúng thứ cần cho “báo trước”. 1.8.0 chỉ dò đệ quy nên không dùng được khung này.
+
+1.9.0 xử lý riêng khung đó:
+
+| Trường hợp | Hành vi |
+|---|---|
+| khung có `conversation.snippet` + `conversation.last_sent_by` | **báo ngay** tại thời điểm khung tới, ghi `báo TRƯỚC khi dòng hiện` |
+| khung chỉ là bản vá (thiếu `last_sent_by`, ví dụ chỉ `tags`/`seen`) | **không đoán** chiều tin; gọi riêng trang đó sau **150 ms** để lấy bản chuẩn rồi báo |
+| khung của trang khác (multi-pages) | dùng `payload.page_id` để gọi đúng trang, chặn 1,5 giây/trang |
+
+Chẩn đoán thêm 4 dòng để lần sau khỏi phải suy đoán:
+
+```
+khung cập nhật hội thoại: N · có người gửi: M · có nội dung: K
+khoá trong khung gần nhất: id,type,tags,success,seen,…
+nhịp quét đã chạy: N lần
+gọi lại: thành công … · HTTP lỗi … · JSON lỗi … · bỏ vì quá sát nhịp … · tab ẩn …
+```
+
+Nếu `có người gửi: 0` mà `có nội dung: 0` → khung socket không mang nội dung tin, khi đó đường nhanh nhất
+vẫn là: khung tới → gọi riêng trang (150 ms) → API trả `last_sent_by` → báo; thường vẫn trước khi dòng đổi màu.
 
 ### Vì sao 1.7.0 vẫn không báo — đọc từ bảng chẩn đoán THẬT của người dùng
 
@@ -535,8 +572,9 @@ Kiểm thử trên dữ liệu thật: `node tools/test_radar_real.js` — **19 
 (`demo/real_dom_fixture.html`) + payload thật 41 hội thoại (`batmesss.har` → `POST /api/v1/conversations`),
 ứng dụng gửi request bằng XMLHttpRequest như thật.
 
-Kiểm thử: `node tools/test_radar.js` — **57 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
+Kiểm thử: `node tools/test_radar.js` — **62 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
 `POST /api/v1/conversations`, kích hoạt theo giao diện (đo được ~0,15 giây), tự gọi lại,
 **trang báo có tin chưa đọc → gọi riêng trang và báo đúng khách ngoài trang đầu**, **hai tin trùng nội dung vẫn báo đủ 2 lần** (phân biệt bằng `mid`),
 **socket Phoenix của Pancake** (`wss://pancake.vn/socket/websocket?vsn=2.0.0`) và **dạng tin nhắn thật**
-(`from.id` + `original_message` + `inserted_at`), kèm kiểm tra tin cũ không bị báo.
+(`from.id` + `original_message` + `inserted_at`), kèm kiểm tra tin cũ không bị báo,
+và **khung `pages:update_conversation`** (đủ dữ liệu → báo ngay; thiếu dữ liệu → gọi riêng trang).
