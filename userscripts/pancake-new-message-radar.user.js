@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.4.0
+// @version      2.5.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.4.0';
+  const VERSION = '2.5.0';
 
   const DEFAULTS = {
     on: true,
@@ -1064,6 +1064,7 @@
       return normText(it.snippet) === key && Date.now() - it.at < 8000;
     });
     if (dup) return;
+    flashLamp(); // ưu tiên tín hiệu nhẹ trước khi dò DOM/dựng bảng
     const convId = hit.convId || (state.people.get(hit.psid) || {}).convId || (pageIdNow() ? pageIdNow() + '_' : '') + hit.psid;
     const know = state.people.get(hit.psid) || {};
     const pos = positionOf(hit.psid, convId);
@@ -1104,6 +1105,10 @@
   const CSS = `
   .__rd_fab{position:fixed;right:16px;bottom:96px;z-index:2147483000;width:46px;height:46px;border-radius:50%;
     background:#0ea5e9;color:#fff;border:0;cursor:pointer;box-shadow:0 4px 14px rgba(14,165,233,.45);font-size:20px}
+  .__rd_fab{background:#b91c1c!important;border:3px solid #fecaca!important;box-shadow:0 0 12px #ef444466;touch-action:none;cursor:grab}
+  .__rd_fab:active{cursor:grabbing}
+  .__rd_fab.signal{background:#16a34a!important;border-color:#bbf7d0!important;animation:__rd_lamp .35s steps(2,end) infinite}
+  @keyframes __rd_lamp{50%{background:#86efac;box-shadow:0 0 24px #22c55e}}
   .__rd_fab .n{position:absolute;top:-4px;right:-4px;background:#e11d48;color:#fff;border-radius:10px;font-size:11px;
     padding:1px 5px;font-family:system-ui,sans-serif}
   .__rd_panel{position:fixed;right:16px;bottom:150px;z-index:2147483000;width:350px;max-height:64vh;overflow:auto;
@@ -1154,6 +1159,52 @@
   const timeStr = ts => { const d = new Date(ts); const p = n => String(n).padStart(2, '0'); return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); };
   const VIA_TEXT = { websocket: 'websocket', 'danh sách': 'API danh sách', 'chưa gắn tag': 'chưa gắn tag', 'giao diện': 'giao diện', 'thử': 'tin thử' };
 
+  function placeLamp() {
+    if (!state.fab || !CFG.lampPos) return;
+    const x = Math.max(0, Math.min(Number(CFG.lampPos.x) || 0, Math.max(0, window.innerWidth - 46)));
+    const y = Math.max(0, Math.min(Number(CFG.lampPos.y) || 0, Math.max(0, window.innerHeight - 46)));
+    Object.assign(state.fab.style, {left:x + 'px', top:y + 'px', right:'auto', bottom:'auto'});
+  }
+
+  function flashLamp() {
+    state.lampUntil = Date.now() + 2500;
+    if (state.fab) state.fab.classList.add('signal');
+    clearTimeout(state.lampTimer);
+    state.lampTimer = setTimeout(() => {
+      if (state.fab) state.fab.classList.remove('signal');
+    }, 2500);
+  }
+
+  function attachLampDrag(b) {
+    let drag = null;
+    b.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      const r = b.getBoundingClientRect();
+      drag = {id:e.pointerId, x:e.clientX, y:e.clientY, left:r.left, top:r.top, moved:false};
+      if (b.setPointerCapture) b.setPointerCapture(e.pointerId);
+    });
+    b.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+      drag.moved = true;
+      CFG.lampPos = {x:drag.left + dx, y:drag.top + dy};
+      placeLamp();
+    });
+    const end = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (drag.moved) {
+        state.suppressLampClickUntil = Date.now() + 400;
+        const r = b.getBoundingClientRect();
+        CFG.lampPos = {x:r.left, y:r.top};
+        save();
+      }
+      drag = null;
+    };
+    b.addEventListener('pointerup', end);
+    b.addEventListener('pointercancel', end);
+  }
+
   function render() {
     if (!document.body) return;
     style();
@@ -1167,12 +1218,17 @@
       const b = document.createElement('button');
       b.className = '__rd_fab';
       b.title = 'Radar tin nhắn TỚI';
-      b.textContent = '📨';
+      b.textContent = '';
+      b.setAttribute('aria-label', 'Đèn radar: bấm mở bảng, kéo để di chuyển');
+      attachLampDrag(b);
       b.appendChild(Object.assign(document.createElement('span'), { className: 'n' }));
-      b.addEventListener('click', () => { CFG.panel = !CFG.panel; save(); render(); });
+      b.addEventListener('click', () => { if (Date.now() < (state.suppressLampClickUntil || 0)) return; CFG.panel = !CFG.panel; save(); render(); });
       document.body.appendChild(b);
       state.fab = b;
     }
+    placeLamp();
+    state.fab.classList.toggle('signal', Date.now() < (state.lampUntil || 0));
+    state.fab.title = 'Đỏ: chờ tin · Xanh nháy: vừa xác nhận tin khách chưa gắn thẻ · Kéo để di chuyển, bấm để mở/đóng bảng';
     const badge = state.fab.querySelector('.n');
     if (badge) {
       const n = state.items.filter(i => Date.now() - i.at < 120000).length;
@@ -1188,6 +1244,7 @@
     }
     const p = state.panel;
     p.classList.toggle('off', !CFG.panel);
+    if (!CFG.panel) return; // chế độ đèn: không dựng lại danh sách và bảng chẩn đoán
 
     const d = state.diag;
     const srcName = state.listReq
@@ -1205,7 +1262,8 @@
       '<button data-a="notify" class="' + (CFG.notify ? 'on' : '') + '" title="Thông báo hệ thống">🔔</button>' +
       '<button data-a="test" title="Bắn một tin thử">🧪</button>' +
       '<button data-a="diag" title="Chẩn đoán">🔍</button>' +
-      '<button data-a="clear" title="Xoá danh sách">🧹</button></div>' +
+      '<button data-a="clear" title="Xoá danh sách">🧹</button>' +
+      '<button data-a="close" title="Thu thành đèn, vẫn theo dõi tin">✕</button></div>' +
       '<div class="__rd_stat' + (d.hook ? '' : ' bad') + '">' + esc(stat) + '</div>' +
       '<div class="__rd_check' + (state.selfCheck && !state.selfCheck.ok ? ' bad' : '') + '">' +
         esc(state.selfCheck ? state.selfCheck.line : 'đang tự kiểm tra…') + '</div>' +
@@ -1245,6 +1303,7 @@
         ev.stopPropagation();
         const a = btn.getAttribute('data-a');
         if (a === 'in') { CFG.onlyIncoming = !CFG.onlyIncoming; save(); }
+        if (a === 'close') { CFG.panel = false; save(); }
         if (a === 'clear') { state.items = []; }
         if (a === 'test') {
           publish({ psid: '000000000000', snippet: 'Đây là tin THỬ — radar đang chạy bình thường.', avatar: '', outgoing: false, dirKnown: true, ads: [], at: Date.now() }, 'thử');
@@ -1383,6 +1442,7 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
     else go();
     window.addEventListener('load', go);
+    window.addEventListener('resize', placeLamp);
 
     setTimeout(() => {
       try {

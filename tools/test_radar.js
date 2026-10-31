@@ -528,6 +528,33 @@ const diag = () => window.__radar.debug().diag;
   await sendTags('999111224', [3], 'Chưa gắn thẻ được báo');
   check(!items().some(it => it.convId === PAGE + '_999111224'), 'gắn thẻ sau đó -> loại khỏi bảng');
 
+  // ---- 23. thu thành đèn, tín hiệu và vị trí lưu trong cấu hình
+  doc.querySelector('[data-a="close"]').click();
+  check(doc.querySelector('.__rd_panel').classList.contains('off'), 'đóng bảng -> thu gọn nhưng radar vẫn bật');
+  await sendTags('999111225', [], 'Tin cho đèn');
+  check(doc.querySelector('.__rd_fab').classList.contains('signal'), 'bảng đóng vẫn nháy xanh khi có tin chưa gắn thẻ');
+  check(items().some(it => it.snippet === 'Tin cho đèn'), 'chế độ đèn vẫn lưu tin');
+  window.__radar.set({lampPos:{x:123,y:234}});
+  check(doc.querySelector('.__rd_fab').style.left === '123px', 'đặt vị trí đèn');
+  check(JSON.parse(window.localStorage.getItem('radar.cfg')).lampPos.y === 234, 'lưu vị trí vào localStorage');
+  doc.querySelector('.__rd_fab').click();
+  check(!doc.querySelector('.__rd_panel').classList.contains('off'), 'bấm đèn mở lại bảng');
+
+  const lamp = doc.querySelector('.__rd_fab');
+  lamp.getBoundingClientRect = () => ({left:parseFloat(lamp.style.left) || 0, top:parseFloat(lamp.style.top) || 0});
+  const pointer = (type, x, y) => {
+    const e = new window.Event(type, {bubbles:true});
+    Object.assign(e, {pointerId:1, button:0, clientX:x, clientY:y});
+    lamp.dispatchEvent(e);
+  };
+  pointer('pointerdown', 10, 10);
+  pointer('pointermove', 80, 100);
+  pointer('pointerup', 80, 100);
+  check(JSON.parse(window.localStorage.getItem('radar.cfg')).lampPos.y === 324, 'kéo thả lưu toạ độ mới');
+  const panelBeforeDragClick = window.__radar.cfg.panel;
+  lamp.click();
+  check(window.__radar.cfg.panel === panelBeforeDragClick, 'kéo xong không vô tình mở/đóng bảng');
+
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
   check(window.__pageMsg >= 6, 'listener của trang vẫn nhận đủ khung (' + window.__pageMsg + ')');

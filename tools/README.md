@@ -1,3 +1,11 @@
+## Radar 2.5.0 — đèn kéo thả khi thu bảng
+
+- Nút ✕ thu bảng, không tắt radar. Đèn đỏ là trạng thái chờ, **không phải báo lỗi kết nối**. Bấm đèn để mở lại bảng.
+- Tin khách chưa gắn thẻ đã xác nhận (hoặc tin thử 🧪) làm đèn nháy xanh 2,5 giây. Tin trùng/đã có thẻ/shop không tạo tín hiệu. Xanh không có nghĩa dự đoán trước lúc server gửi hoặc đảm bảo DOM chưa xuất hiện.
+- Ưu tiên đổi lớp đèn trước khi dò vị trí DOM/dựng nội dung bảng. Khi thu bảng, không dựng lại danh sách và chẩn đoán nặng. Màn hình chỉ thực sự đổi màu khi trình duyệt paint, không thể đảm bảo sớm hơn React cùng frame.
+- Kéo đèn bằng pointer (chuột/cảm ứng), lưu `lampPos` trong `radar.cfg` ở localStorage. Giới hạn đèn trong viewport, áp lại vị trí khi reload/resize. Kéo không kích hoạt click mở bảng.
+- Kiểm thử: đóng/mở bảng, nhận tin lúc đóng, lớp tín hiệu, đặt/lưu vị trí, kéo thả và chặn click sau kéo; bộ mô phỏng và 19 ca DOM/API thật đạt. Chưa đo thời điểm paint trên trình duyệt người dùng.
+
 ## Radar 2.4.0 — bỏ xác minh dư sau socket đầy đủ
 
 Dựa trên log v2.2.0 của người dùng: 272 khung update, cả 272 có người gửi và nội dung; 134 lần gọi riêng trang, 496 lượt xử lý danh sách. Không còn coi mọi khung là bản vá mỏng.
