@@ -72,6 +72,8 @@ window.__convs = [
 ];
 window.__listUrls = [];
 window.__pageOverride = null;
+window.__untagged = null;
+window.__untaggedUrls = [];
 window.__pageCounts = {};
 window.fetch = function (input, init) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
@@ -85,7 +87,14 @@ window.fetch = function (input, init) {
       hasBody: !!(init && init.body), body: (init && init.body) || null
     });
   }
+  const isUntagged = url.indexOf('NO_TAG') >= 0;
+  if (isUntagged && url.indexOf('/messages') < 0) window.__untaggedUrls.push(url);
   const isPageList = path.indexOf('/api/v1/pages/') >= 0;
+  if (isUntagged && !isPageList) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({
+      success: true, conversations: (window.__untagged || []), pages_with_current_count: {}
+    }), clone() { return this; } });
+  }
   const body = isPageList
     ? { success: true, conversations: (window.__pageOverride || window.__convs), pages_with_current_count: {} }
     : { success: true, conversations: window.__convs, pages_with_current_count: window.__pageCounts };
@@ -422,6 +431,24 @@ const diag = () => window.__radar.debug().diag;
   check(diag().pagePolls === pagePollsBefore + 1, 'khung thiếu dữ liệu -> gọi riêng trang ngay');
   check(items().some(i => i.name === 'Khách Vá'), 'gọi riêng trang -> báo đúng khách');
   window.__pageOverride = null;
+
+  // ---- 19. hội thoại CHƯA GẮN TAG (danh sách của app lọc theo tag nên không thấy)
+  const base6 = items().length;
+  window.__untagged = [{
+    id: PAGE + '_444333222', page_id: PAGE, from_psid: '444333222',
+    customers: [{ id: 'u4', fb_id: '444333222', name: 'Khách Chưa Tag' }],
+    snippet: 'Tin chưa gắn tag', updated_at: new Date().toISOString(), tags: [],
+    last_sent_by: { id: '444333222', name: 'Khách Chưa Tag' }
+  }];
+  await sleep(1800);
+  check(window.__untaggedUrls.length > 0, 'có hỏi riêng nhóm chưa gắn tag (tags=["NO_TAG"])');
+  check(window.__untaggedUrls.some(u => /tags=%5B%22NO_TAG%22%5D|tags=\[%22NO_TAG%22\]/.test(u)),
+    'đúng tham số tags=["NO_TAG"] như trong HAR');
+  check(window.__untaggedUrls.some(u => u.indexOf('POST ') === 0) === false, '(đánh dấu)');
+  check(items().some(i => i.name === 'Khách Chưa Tag'), 'hội thoại chưa gắn tag -> báo được', items().length - base6);
+  check(items().some(i => i.via === 'chưa gắn tag'), 'ghi đúng nguồn: chưa gắn tag', JSON.stringify(items().map(i => [i.name, i.via])));
+  check((diag().untaggedPolls || 0) >= 1, 'chẩn đoán đếm được lần hỏi chưa gắn tag');
+  window.__untagged = null;
 
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');

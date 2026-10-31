@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.9.0
+// @version      2.0.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.9.0';
+  const VERSION = '2.0.0';
 
   const DEFAULTS = {
     on: true,
@@ -45,7 +45,9 @@
     domTrigger: true,        // dòng trên màn hình vừa đổi -> gọi lại danh sách NGAY (lấy chiều tin)
     watchList: true,         // dự phòng bằng API danh sách (chiều chính xác)
     watchDom: false,         // theo dõi giao diện: KHÔNG biết chiều -> mặc định tắt
-    defaultPoll: true        // nếu chưa học được request danh sách nào thì tự dựng request (đúng dạng trong HAR)
+    defaultPoll: true,       // nếu chưa học được request danh sách nào thì tự dựng request (đúng dạng trong HAR)
+    untaggedPoll: true,      // hỏi riêng nhóm CHƯA GẮN TAG (tags=["NO_TAG"] — đúng dạng trong tinnhanmoi.har)
+    untaggedMs: 1200         // nhịp hỏi nhóm chưa gắn tag
   };
 
   const CFG = (function () {
@@ -72,6 +74,7 @@
     pagePollAt: {},
     pagePollFail: 0,
     internal: false,      // đang tự gọi (không ghi đè request danh sách)
+    untaggedReq: null,    // request riêng cho nhóm CHƯA GẮN TAG
     panel: null,
     fab: null,
     diagOpen: false,
@@ -82,6 +85,7 @@
       pollOk: 0, pollBad: 0, pollJsonErr: 0, hiddenSkips: 0,
       phxTopics: {}, phxEvents: {}, rawFrames: [], jsonFrames: 0,
       convPatches: 0, patchWithSender: 0, patchWithSnippet: 0, patchKeys: '', ticks: 0,
+      untaggedPolls: 0, untaggedErr: 0, untaggedConvs: 0,
       msgFrames: 0, threadFrames: 0, parsed: 0,
       skippedOut: 0, skippedUnknown: 0, lastFrameAt: 0, lastErr: '', lastSender: ''
     }
@@ -322,7 +326,7 @@
     // dù khung đủ hay thiếu: đẩy nhanh dữ liệu chuẩn của trang (last_sent_by chính xác)
     if (pid && /^\d{5,}$/.test(pid)) {
       if (state.__patchTimer) clearTimeout(state.__patchTimer);
-      state.__patchTimer = setTimeout(() => { state.__patchTimer = 0; try { targetPagePoll(pid, true); } catch (e) { /* ignore */ } }, 150);
+      state.__patchTimer = setTimeout(() => { state.__patchTimer = 0; try { targetPagePoll(pid, true); } catch (e) { /* ignore */ } }, 80);
     }
   }
 
@@ -446,7 +450,8 @@
     const arr = json.conversations || json.data || [];
     if (!Array.isArray(arr) || !arr.length) return;
     state.listHits++;
-    if (!quiet || arr.length > 1) logEvent('🔄', 'danh sách: ' + arr.length + ' hội thoại');
+    if (viaName === 'chưa gắn tag') state.diag.untaggedConvs = arr.length;
+    if (!quiet || arr.length > 1) logEvent('🔄', (viaName === 'chưa gắn tag' ? 'chưa gắn tag: ' : 'danh sách: ') + arr.length + ' hội thoại');
     const fresh = [];
     arr.forEach(cv => {
       if (!cv || typeof cv !== 'object') return;
@@ -593,7 +598,7 @@
       const p = _fetch.apply(this, arguments);
       try {
         if (isListUrl(url)) {
-          p.then(r => { let c; try { c = r.clone(); } catch (e) { return; } c.json().then(j => ingestList(j)).catch(err => { state.diag.pollJsonErr = (state.diag.pollJsonErr || 0) + 1; logEvent('⚠️', 'đọc JSON danh sách lỗi: ' + ((err && err.message) || err)); }); }).catch(() => {});
+          p.then(r => { let c; try { c = r.clone(); } catch (e) { return; } c.json().then(j => ingestList(j, false, false, /NO_TAG/i.test(url) ? 'chưa gắn tag' : undefined)).catch(err => { state.diag.pollJsonErr = (state.diag.pollJsonErr || 0) + 1; logEvent('⚠️', 'đọc JSON danh sách lỗi: ' + ((err && err.message) || err)); }); }).catch(() => {});
         }
       } catch (e) { /* ignore */ }
       return p;
@@ -720,6 +725,71 @@
     return d || state.listReq || null;
   }
 
+  /** danh sách page id đang theo dõi (lấy từ request đã học, từ URL, từ hội thoại, từ DOM) */
+  function pageIds() {
+    const out = [];
+    const add = id => { const x = String(id || ''); if (/^\d{5,}$/.test(x) && out.indexOf(x) < 0) out.push(x); };
+    const lr = state.listReq && String(state.listReq.url || '');
+    if (lr) { const re = /pages\[(\d+)\]/g; let m; while ((m = re.exec(lr))) add(m[1]); }
+    add(pageIdNow());
+    Array.from(state.convs.keys()).forEach(k => add(String(k).split('_')[0]));
+    rows().forEach(el => add(String(convIdOfRow(el)).split('_')[0]));
+    return out;
+  }
+
+  /**
+   * Request CHƯA GẮN TAG — chép đúng từ tinnhanmoi.har (entry #5):
+   *   POST /api/v1/conversations?pages[..]=0&unread_first=true&mode=OR
+   *        &tags=["NO_TAG"]&except_tags=[]&cursor_mode=true&from_platform=web
+   *   body: multipart  type=ALL,UNREAD
+   * Danh sách mặc định của ứng dụng bị lọc theo tag nên hội thoại CHƯA gắn tag không bao giờ xuất hiện;
+   * phải hỏi riêng bằng bộ lọc NO_TAG.
+   */
+  function buildUntaggedReq() {
+    const ids = pageIds();
+    if (!ids.length) return null;
+    const key = ids.join(',');
+    if (state.untaggedReq && state.untaggedReq.key === key) return state.untaggedReq;
+    const q = ids.map(id => 'pages[' + id + ']=0').join('&');
+    state.untaggedReq = {
+      key: key, own: true, untagged: true, lastPoll: 0,
+      url: '/api/v1/conversations?' + q + '&unread_first=true&mode=OR' +
+        '&tags=%5B%22NO_TAG%22%5D&except_tags=[]&cursor_mode=true&from_platform=web',
+      method: 'POST',
+      headers: null,
+      body: unreadBody()
+    };
+    return state.untaggedReq;
+  }
+
+  function pollUntagged(force) {
+    if (!CFG.on || !CFG.watchList || !CFG.untaggedPoll) return;
+    if (state.diag.untaggedErr >= 3) return;                       // hỏng 3 lần thì thôi, không phá Pancake
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    const r = buildUntaggedReq();
+    if (!r) return;
+    const gap = force ? 700 : Math.max(700, (Number(CFG.untaggedMs) || 1200) - 200);
+    if (Date.now() - (r.lastPoll || 0) < gap) return;
+    r.lastPoll = Date.now();
+    state.diag.untaggedPolls = (state.diag.untaggedPolls || 0) + 1;
+    const prevInternal = state.internal;
+    state.internal = true;
+    try {
+      const pr = fetch(r.url, { method: 'POST', credentials: 'include', cache: 'no-store', body: r.body });
+      Promise.resolve(pr).then(res => {
+        if (res && res.ok === false) {
+          state.diag.untaggedErr = (state.diag.untaggedErr || 0) + 1;
+          logEvent('⚠️', 'danh sách chưa gắn tag HTTP ' + res.status);
+        }
+      }).catch(err => logEvent('⚠️', 'gọi chưa gắn tag lỗi: ' + err.message));
+    } catch (e) {
+      state.diag.untaggedErr = (state.diag.untaggedErr || 0) + 1;
+      logEvent('⚠️', 'gọi chưa gắn tag lỗi: ' + e.message);
+    } finally {
+      state.internal = prevInternal;
+    }
+  }
+
   function pollList(force, urgent) {
     if (!CFG.on || !CFG.watchList) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') { state.diag.hiddenSkips = (state.diag.hiddenSkips || 0) + 1; return; }
@@ -731,7 +801,7 @@
     }
     // urgent = dòng vừa đổi trên màn hình: gần như gọi ngay, không để bị chặn bởi nhịp quét
     const pollMs = Math.max(1000, Number(CFG.pollMs) || 2000);
-    const gap = urgent ? 250
+    const gap = urgent ? 150
       : (force ? Math.max(600, Number(CFG.pollMinGap) || 1200) : Math.max(300, pollMs - 200));
     if (Date.now() - (r.lastPoll || 0) < gap) { state.diag.pollSkips = (state.diag.pollSkips || 0) + 1; return; }
     r.lastPoll = Date.now();
@@ -818,7 +888,7 @@
         if (CFG.domTrigger) {
           state.lastChangeAt = Date.now();
           if (state.__pollTimer) clearTimeout(state.__pollTimer);
-          state.__pollTimer = setTimeout(() => { state.__pollTimer = 0; pollList(true, true); }, 150);
+          state.__pollTimer = setTimeout(() => { state.__pollTimer = 0; pollList(true, true); }, 60);
         }
         if (!CFG.watchDom) continue;   // không tự báo vì giao diện không cho biết chiều
         const outPrefix = /^Bạn\s*:|^Bạn\s+đã\s+|^You\s*:/i.test(snip);
@@ -959,7 +1029,7 @@
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const timeStr = ts => { const d = new Date(ts); const p = n => String(n).padStart(2, '0'); return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); };
-  const VIA_TEXT = { websocket: 'websocket', 'danh sách': 'API danh sách', 'giao diện': 'giao diện', 'thử': 'tin thử' };
+  const VIA_TEXT = { websocket: 'websocket', 'danh sách': 'API danh sách', 'chưa gắn tag': 'chưa gắn tag', 'giao diện': 'giao diện', 'thử': 'tin thử' };
 
   function render() {
     if (!document.body) return;
@@ -1036,6 +1106,7 @@
           '<span class="__rd_pos' + (top ? ' top' : '') + '">' + esc(label) + '</span>' +
           '<span class="__rd_time">' + timeStr(it.at) + '</span></div>' +
           '<div class="__rd_snip">' + esc(it.snippet) + '</div>' +
+          (it.via === 'chưa gắn tag' ? '<div class="__rd_ad">🏷️ chưa gắn tag</div>' : '') +
           (it.ads && it.ads.length ? '<div class="__rd_ad">🔥 quảng cáo · ad_id ' + esc(it.ads[0]) + '</div>' : '') +
           '<div class="__rd_via">chiều: ' + (it.dirKnown ? 'khách → shop' : 'chưa rõ') + ' · ' +
             (it.via === 'websocket' ? 'báo TRƯỚC khi dòng hiện' : (it.lag ? 'báo sau dòng ' + (it.lag / 1000).toFixed(1) + 's' : 'nguồn: ' + esc(VIA_TEXT[it.via] || it.via))) + '</div>' +
@@ -1092,6 +1163,7 @@
       'trang có tin mới: ' + d.pageTriggers + ' · gọi riêng trang: ' + d.pagePolls + ' (lỗi ' + d.pageFail + ')',
       'dòng trong danh sách: ' + rows().length,
       'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
+      'chưa gắn tag: hỏi ' + (d.untaggedPolls || 0) + ' lần · lỗi ' + (d.untaggedErr || 0) + ' · ' + (d.untaggedConvs || 0) + ' hội thoại chưa gắn tag đã thấy',
       'khung cập nhật hội thoại: ' + (d.convPatches || 0) + ' · có người gửi: ' + (d.patchWithSender || 0) + ' · có nội dung: ' + (d.patchWithSnippet || 0),
       'khoá trong khung gần nhất: ' + (d.patchKeys || '—'),
       'nhịp quét đã chạy: ' + (d.ticks || 0) + ' lần',
@@ -1175,6 +1247,8 @@
       state.diag.ticks = (state.diag.ticks || 0) + 1;
       if (CFG.on) pollList();
     }, Math.max(1000, Number(CFG.pollMs) || 2000));
+
+    setInterval(() => { try { pollUntagged(); } catch (e) { /* ignore */ } }, Math.max(700, Number(CFG.untaggedMs) || 1200));
 
     // nhịp tim: chứng minh radar còn thức và cho biết 30 giây qua nó làm được gì
     const hb = { listHits: 0, polls: 0, frames: 0, skippedOut: 0 };

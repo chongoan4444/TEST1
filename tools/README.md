@@ -358,7 +358,44 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.9.0** (báo ngay từ khung socket, trước khi Pancake vẽ lại dòng).
+Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **2.0.0** (báo được cả hội thoại CHƯA GẮN TAG + nhanh hơn).
+
+### 2.0.0 — vì sao trước đây chỉ báo tin ĐÃ GẮN TAG
+
+Danh sách mặc định của ứng dụng bị **lọc theo tag** (xem `loaddanhsach.har`:
+`GET /api/v1/pages/694078980461601/conversations?…&tags=[4,5,10,13]&except_tags=[]`).
+Hội thoại **chưa gắn tag** — tức khách mới nhắn lần đầu — không nằm trong lát cắt đó, nên radar
+chỉ thấy những hội thoại đã được gắn tag. Đúng hiện tượng “chỉ báo tin đã gắn tag”.
+
+Bản 2.0.0 hỏi thêm một request **riêng cho nhóm chưa gắn tag**, chép đúng từ `tinnhanmoi.har` (entry #5):
+
+```
+POST /api/v1/conversations?pages[..]=0&unread_first=true&mode=OR
+     &tags=["NO_TAG"]&except_tags=[]&cursor_mode=true&from_platform=web
+body: multipart/form-data  type=ALL,UNREAD
+```
+
+| Thay đổi | Số liệu |
+|---|---|
+| hỏi riêng nhóm chưa gắn tag | mặc định mỗi **1,2 giây** (`untaggedMs`), chặn 700 ms, tự tắt sau 3 lần lỗi |
+| tin từ nhóm này hiện nhãn **🏷️ chưa gắn tag** | để phân biệt với tin từ danh sách có tag |
+| dòng vừa đổi → gọi lại danh sách | 150 ms → **60 ms** |
+| khung socket báo hội thoại đổi → gọi riêng trang | 150 ms → **80 ms** |
+| gọi lại “khẩn” không bị chặn nhịp | 250 ms → **150 ms** |
+
+Chẩn đoán có thêm dòng:
+
+```
+chưa gắn tag: hỏi N lần · lỗi K · M hội thoại chưa gắn tag đã thấy
+```
+
+Muốn nhanh hơn nữa (đổi lại bất cứ lúc nào trong console):
+
+```js
+__radar.set({ untaggedMs: 800 })   // hỏi nhóm chưa gắn tag mỗi 0,8 giây
+__radar.set({ pollMs: 1500 })      // danh sách thường
+__radar.set({ untaggedPoll: false })  // tắt hẳn nếu thấy nặng
+```
 
 ### 1.9.0 — báo TRƯỚC khi dòng hiện: dùng đúng khung socket của Pancake
 
@@ -572,9 +609,10 @@ Kiểm thử trên dữ liệu thật: `node tools/test_radar_real.js` — **19 
 (`demo/real_dom_fixture.html`) + payload thật 41 hội thoại (`batmesss.har` → `POST /api/v1/conversations`),
 ứng dụng gửi request bằng XMLHttpRequest như thật.
 
-Kiểm thử: `node tools/test_radar.js` — **62 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
+Kiểm thử: `node tools/test_radar.js` — **68 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
 `POST /api/v1/conversations`, kích hoạt theo giao diện (đo được ~0,15 giây), tự gọi lại,
 **trang báo có tin chưa đọc → gọi riêng trang và báo đúng khách ngoài trang đầu**, **hai tin trùng nội dung vẫn báo đủ 2 lần** (phân biệt bằng `mid`),
 **socket Phoenix của Pancake** (`wss://pancake.vn/socket/websocket?vsn=2.0.0`) và **dạng tin nhắn thật**
 (`from.id` + `original_message` + `inserted_at`), kèm kiểm tra tin cũ không bị báo,
-và **khung `pages:update_conversation`** (đủ dữ liệu → báo ngay; thiếu dữ liệu → gọi riêng trang).
+**khung `pages:update_conversation`** (đủ dữ liệu → báo ngay; thiếu dữ liệu → gọi riêng trang),
+và **nhóm chưa gắn tag** (`tags=["NO_TAG"]` → báo được hội thoại chưa gắn tag).
