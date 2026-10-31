@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.3.0
+// @version      2.4.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.3.0';
+  const VERSION = '2.4.0';
 
   const DEFAULTS = {
     on: true,
@@ -336,7 +336,23 @@
       };
       if (hasSender) ingestList({ conversations: [patch] }, true, true, 'websocket');
     }
-    // Không dùng một debounce chung: khung trang B không được huỷ lần xác minh trang A.
+    // Log thực tế: 272/272 khung đã có snippet + sender. Không gọi lại 40 hội thoại
+    // chỉ để xác minh dữ liệu vừa nhận; tiết kiệm request và tránh tranh tài nguyên với UI.
+    const complete = !!id && hasSnippet && !!(cv.last_sent_by && cv.last_sent_by.id) &&
+      !!(cv.updated_at || cv.updatedAt) && Array.isArray(cv.tags);
+    if (complete) {
+      d.socketComplete = (d.socketComplete || 0) + 1;
+      return;
+    }
+    // Khung chắc chắn có thẻ không thể tạo thông báo trong chế độ chỉ chưa gắn thẻ.
+    if (CFG.onlyUntagged && Array.isArray(cv.tags) && cv.tags.length > 0) {
+      state.items = state.items.filter(it => it.convId !== id);
+      render();
+      d.socketTaggedNoFetch = (d.socketTaggedNoFetch || 0) + 1;
+      return;
+    }
+    d.socketVerify = (d.socketVerify || 0) + 1;
+    // Không dùng debounce chung giữa các trang.
     if (pid && /^\d{5,}$/.test(pid)) {
       targetPagePoll(pid, true);
     }
@@ -1294,6 +1310,7 @@
       'chưa gắn tag: hỏi ' + (d.untaggedPolls || 0) + ' lần · lỗi ' + (d.untaggedErr || 0) + ' · ' + (d.untaggedConvs || 0) + ' hội thoại chưa gắn tag đã thấy',
       'đo từng tin (DOM, không phải thời điểm paint): ' + JSON.stringify(state.items.slice(0, 8).map(it => ({convId: it.convId, status: it.timingStatus, socketToAlertMs: it.patchToAlertMs, leadMs: it.leadMs}))),
       'lọc chỉ chưa gắn thẻ: ' + (CFG.onlyUntagged ? 'bật' : 'tắt') + ' · bỏ có thẻ/chưa rõ thẻ: ' + (d.skippedTagged || 0),
+      'socket đủ dữ liệu, không gọi lại: ' + (d.socketComplete || 0) + ' · có thẻ bỏ xác minh: ' + (d.socketTaggedNoFetch || 0) + ' · khung thiếu cần xác minh: ' + (d.socketVerify || 0),
       'khung cập nhật hội thoại: ' + (d.convPatches || 0) + ' · có người gửi: ' + (d.patchWithSender || 0) + ' · có nội dung: ' + (d.patchWithSnippet || 0),
       'khoá trong khung gần nhất: ' + (d.patchKeys || '—'),
       'nhịp quét đã chạy: ' + (d.ticks || 0) + ' lần',

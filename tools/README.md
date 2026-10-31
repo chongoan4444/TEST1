@@ -1,3 +1,11 @@
+## Radar 2.4.0 — bỏ xác minh dư sau socket đầy đủ
+
+Dựa trên log v2.2.0 của người dùng: 272 khung update, cả 272 có người gửi và nội dung; 134 lần gọi riêng trang, 496 lượt xử lý danh sách. Không còn coi mọi khung là bản vá mỏng.
+
+Khung có id, snippet, sender id, updated_at và tags được xử lý trực tiếp như trước nhưng **không gọi lại API trang sau đó**. Khung thiếu dữ liệu vẫn xác minh; khung chắc chắn có thẻ không gọi xác minh khi chỉ theo dõi chưa gắn thẻ. Không tăng polling, không chặn listener ứng dụng, không thay đổi luật chỉ tin tới/chưa gắn thẻ. 🔍 bổ sung ba bộ đếm đường trực tiếp/bỏ khung có thẻ/cần xác minh.
+
+Đây là giảm request dư và tải xử lý, không đảm bảo thắng thời điểm React hiển thị. Log cũ chỉ có pending/unobserved nên chưa đo được lợi thế DOM. Kiểm thử bổ sung xác nhận khung đầy đủ không phát request trang.
+
 ## Radar 2.3.0 — chỉ hiển thị tin khách chưa gắn thẻ
 
 Mặc định `onlyUntagged: true`. Bộ lọc chạy trước khi đưa tin vào bảng/phát thông báo trên mọi nguồn: chỉ nhận khi hội thoại có `tags` là mảng rỗng. Có thẻ (kể cả mã âm) hoặc chưa biết thẻ đều không báo. Không dựa vào tên nguồn NO_TAG. Tin thử 🧪 vẫn được phép để thử giao diện.
