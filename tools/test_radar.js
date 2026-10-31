@@ -488,6 +488,20 @@ const diag = () => window.__radar.debug().diag;
   check(!!sc && typeof sc.ok === 'boolean', 'tự kiểm tra trả về kết luận ok/kèm lý do');
   check(!!sc && /danh sách \d+ lần/.test(sc.line), 'dòng tự kiểm tra có số liệu thật (' + (sc && sc.line) + ')');
 
+  // ---- 21. đo thứ tự thực tế, không suy diễn websocket = báo trước
+  const timed = items().find(i => i.name === 'Khách Mới UTC');
+  check(timed && timed.timingStatus === 'pending', 'tin chưa có DOM -> chờ đo, không tự nhận báo trước');
+  const newRow = doc.createElement('div');
+  newRow.id = PAGE + '_333222111__0';
+  newRow.className = 'conversation-list-item';
+  newRow.innerHTML = '<div class="snippet-text">Tin mới lúc này</div>';
+  doc.querySelector('.conversation-list').appendChild(newRow);
+  await sleep(100);
+  window.__radar.scan();
+  check(timed && timed.timingStatus === 'before-dom' && timed.leadMs >= 0,
+    'DOM đến sau -> ghi số ms đo được');
+  check(timed && timed.convId === PAGE + '_333222111', 'giữ đúng mã trang/hội thoại khi đo');
+
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
   check(window.__pageMsg >= 6, 'listener của trang vẫn nhận đủ khung (' + window.__pageMsg + ')');

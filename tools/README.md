@@ -1,3 +1,14 @@
+## Radar 2.2.0 — đường socket nhanh và đo từng tin
+
+- `pages:update_conversation` gọi xác minh riêng trang ngay, bỏ debounce 80 ms chung vốn có thể để khung trang B huỷ việc xác minh trang A.
+- Giữ giới hạn 1,5 giây/trang. Nếu tín hiệu rơi trong giới hạn, đặt một lần gọi cuối nhịp cho **từng trang**, không bỏ hẳn tín hiệu. Không tăng nhịp polling nền.
+- Khung đủ nội dung/người gửi vẫn đi qua luật kiểm tra chiều tin; khung chỉ đổi tag không được tự thông báo là khách nhắn.
+- Giữ mã hội thoại/trang thật khi báo, phục vụ đối chiếu đúng dòng trên multi-pages.
+- Bỏ khẳng định “websocket = báo trước”. Mỗi tin ghi trạng thái: nội dung đã có trong DOM khi báo / chờ đối chiếu / quan sát thấy DOM sau thông báo N ms / không quan sát thấy sau 30 giây.
+- 🔍 ghi `socketToAlertMs` (khung cập nhật gần nhất của hội thoại → báo) và `leadMs` (báo → lần đầu quan sát thấy nội dung khớp trong DOM). Đây là số đo DOM, **không phải thời điểm browser paint**, không phải độ trễ từ lúc khách bấm gửi. Khung cập nhật gần nhất có thể là thay đổi tag, không nhất thiết là sự kiện tạo tin.
+- Đối chiếu chỉ trên dòng có trong DOM, không suy luận tin bị lọc/ngoài màn hình là “báo trước”. So khớp snippet sau chuẩn hoá; nếu giao diện rút gọn nội dung khác API thì không kết luận.
+- Kiểm thử: mock 78 mục, DOM/API thật 19 mục. Cần lấy 🔍 trên trình duyệt người dùng để xác nhận lợi thế thực tế.
+
 ## Radar 2.1.0 — sửa đọc giờ và đính chính bộ lọc
 
 **Đính chính thông tin 2.0.0 bên dưới:** không thể khẳng định `tags=["NO_TAG"]` chỉ trả hội thoại chưa gắn tag. Trong `tinnhanmoi.har`, chính response của request này có hội thoại mang `tags: [4,83,172]`. Bản 2.1.0 thử request không lọc tag; nếu HTTP lỗi thì thử biến thể trong HAR. Đây là đường cần kiểm chứng trên trình duyệt thật, không phải bằng chứng đã hoạt động ngoài thực tế.

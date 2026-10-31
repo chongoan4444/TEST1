@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.1.0
+// @version      2.2.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.1.0';
+  const VERSION = '2.2.0';
 
   const DEFAULTS = {
     on: true,
@@ -297,7 +297,7 @@
    * Khung `pages:update_conversation` của socket Pancake (đọc từ bảng chẩn đoán thật):
    *   ["7",null,"multiple_pages:<uid>","pages:update_conversation",
    *    {"page_id":"769625892902516","conversation":{"id":"769625892902516_2890…","type":"INBOX","tags":[…],"seen":true,…}}]
-   * Khung này tới TRƯỚC khi React vẽ lại dòng, nên đây là đường "báo trước".
+   * Khung có thể tới trước khi React cập nhật dòng; thứ tự phải đo trong DOM.
    *  • khung có snippet + last_sent_by  -> báo ngay (biết chắc chiều tin)
    *  • khung chỉ là bản vá thiếu dữ liệu -> gọi riêng trang đó ngay để lấy bản chuẩn
    */
@@ -317,6 +317,10 @@
     if (hasSender) d.patchWithSender = (d.patchWithSender || 0) + 1;
     if (hasSnippet) d.patchWithSnippet = (d.patchWithSnippet || 0) + 1;
 
+      state.patchTimes = state.patchTimes || new Map();
+      state.patchTimes.set(id, Date.now());
+      if (state.patchTimes.size > 300) state.patchTimes.delete(state.patchTimes.keys().next().value);
+
     if (id && hasSnippet) {
       const known = state.convs.get(id) || {};
       const patch = {
@@ -331,10 +335,9 @@
       };
       if (hasSender) ingestList({ conversations: [patch] }, true, true, 'websocket');
     }
-    // dù khung đủ hay thiếu: đẩy nhanh dữ liệu chuẩn của trang (last_sent_by chính xác)
+    // Không dùng một debounce chung: khung trang B không được huỷ lần xác minh trang A.
     if (pid && /^\d{5,}$/.test(pid)) {
-      if (state.__patchTimer) clearTimeout(state.__patchTimer);
-      state.__patchTimer = setTimeout(() => { state.__patchTimer = 0; try { targetPagePoll(pid, true); } catch (e) { /* ignore */ } }, 80);
+      targetPagePoll(pid, true);
     }
   }
 
@@ -495,7 +498,7 @@
         let outgoing = null;
         if (sbId && psid) outgoing = (sbId === psid) ? false : (pageId && sbId === pageId ? true : null);
         const lag = state.lastChangeAt && (Date.now() - state.lastChangeAt < 15000) ? (Date.now() - state.lastChangeAt) : 0;
-        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag, updatedAt: updated, untagged: untaggedConv });
+        fresh.push({ convId: id, psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag, updatedAt: updated, untagged: untaggedConv });
       }
     });
 
@@ -539,7 +542,17 @@
     if (state.pagePollFail >= 2) return;
     const now = Date.now();
     const gapPage = urgent ? 1500 : 3000;
-    if (now - (state.pagePollAt[pageId] || 0) < gapPage) return;
+    if (now - (state.pagePollAt[pageId] || 0) < gapPage) {
+      // Giữ một lần chạy cuối nhịp, không bỏ mất tín hiệu khách vừa nhắn.
+      if (urgent) {
+        state.pageRetry = state.pageRetry || {};
+        if (!state.pageRetry[pageId]) state.pageRetry[pageId] = setTimeout(() => {
+          delete state.pageRetry[pageId];
+          if (CFG.on) targetPagePoll(pageId, true);
+        }, gapPage - (now - state.pagePollAt[pageId]) + 5);
+      }
+      return;
+    }
     state.pagePollAt[pageId] = now;
     const url = '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations?current_count=40&unread_first=true&mode=OR&except_tags=[]&from_platform=web';
     state.diag.pagePolls++;
@@ -933,6 +946,7 @@
         route({ psid, snippet: snip, avatar: '', ads: [], at: Date.now(), sender: '', outgoing: outPrefix, dirKnown: outPrefix, kind: 'dom' }, 'giao diện');
       }
     }
+    measureDom();
     state.domReady = true;
     render();
   }
@@ -945,6 +959,7 @@
       if (list.__rdObserved) return true;
       list.__rdObserved = true;
       const mo = new MutationObserver(() => {
+        measureDom();
         if (state.__scanTimer) return;
         state.__scanTimer = setTimeout(() => { state.__scanTimer = 0; try { scanDom(); } catch (e) { state.diag.lastErr = 'dom: ' + e.message; } }, 300);
       });
@@ -969,6 +984,42 @@
 
   const normText = s => String(s || '').replace(/^(Bạn|You)\s*(:|đã|sent)\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
+  // Đo DOM, không suy diễn thứ tự từ tên nguồn. DOM xuất hiện không đồng nghĩa đã paint.
+  function rowHasMessage(item) {
+    const row = positionOf(item.psid, item.convId).el;
+    if (!row) return false;
+    const snippet = textOf(row, ['.snippet-text', '.snippet-line', '.snippet-wrap', '[class*="snippet"]']);
+    return !!snippet && normText(snippet) === normText(item.snippet);
+  }
+
+  function measureAlert(item) {
+    item.alertAt = Date.now();
+    item.patchAt = (state.patchTimes && state.patchTimes.get(item.convId)) || 0;
+    item.patchToAlertMs = item.patchAt ? item.alertAt - item.patchAt : null;
+    item.domAt = rowHasMessage(item) ? item.alertAt : 0;
+    item.timingText = item.domAt ? 'nội dung đã có trong DOM khi báo' : 'đã báo · chờ đối chiếu DOM';
+    item.timingStatus = item.domAt ? 'already-visible' : 'pending';
+  }
+
+  function measureDom() {
+    let changed = false;
+    state.items.forEach(item => {
+      if (item.timingStatus !== 'pending') return;
+      if (rowHasMessage(item)) {
+        item.domAt = Date.now();
+        item.leadMs = item.domAt - item.alertAt;
+        item.timingStatus = 'before-dom';
+        item.timingText = 'báo trước khi quan sát thấy nội dung trong DOM ' + item.leadMs + ' ms';
+        changed = true;
+      } else if (Date.now() - item.alertAt > 30000) {
+        item.timingStatus = 'unobserved';
+        item.timingText = 'không quan sát thấy nội dung trong DOM sau 30 giây';
+        changed = true;
+      }
+    });
+    if (changed) render();
+  }
+
   function publish(hit, via) {
     if (!hit || !hit.psid) return;
     const key = normText(hit.snippet);
@@ -983,7 +1034,7 @@
       return normText(it.snippet) === key && Date.now() - it.at < 8000;
     });
     if (dup) return;
-    const convId = (pageIdNow() ? pageIdNow() + '_' : '') + hit.psid;
+    const convId = hit.convId || (state.people.get(hit.psid) || {}).convId || (pageIdNow() ? pageIdNow() + '_' : '') + hit.psid;
     const know = state.people.get(hit.psid) || {};
     const pos = positionOf(hit.psid, convId);
     const item = {
@@ -1002,6 +1053,7 @@
       msgId: hit.msgId || '',
       untagged: !!hit.untagged
     };
+    measureAlert(item);
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
     render();
@@ -1152,7 +1204,7 @@
           (it.untagged ? '<div class="__rd_ad">🏷️ chưa gắn tag</div>' : '') +
           (it.ads && it.ads.length ? '<div class="__rd_ad">🔥 quảng cáo · ad_id ' + esc(it.ads[0]) + '</div>' : '') +
           '<div class="__rd_via">chiều: ' + (it.dirKnown ? 'khách → shop' : 'chưa rõ') + ' · ' +
-            (it.via === 'websocket' ? 'báo TRƯỚC khi dòng hiện' : (it.lag ? 'báo sau dòng ' + (it.lag / 1000).toFixed(1) + 's' : 'nguồn: ' + esc(VIA_TEXT[it.via] || it.via))) + '</div>' +
+            esc(it.timingText || ('nguồn: ' + (VIA_TEXT[it.via] || it.via))) + '</div>' +
           '</div></div>';
       }).join('');
     }
@@ -1226,6 +1278,7 @@
       'dòng trong danh sách: ' + rows().length,
       'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
       'chưa gắn tag: hỏi ' + (d.untaggedPolls || 0) + ' lần · lỗi ' + (d.untaggedErr || 0) + ' · ' + (d.untaggedConvs || 0) + ' hội thoại chưa gắn tag đã thấy',
+      'đo từng tin (DOM, không phải thời điểm paint): ' + JSON.stringify(state.items.slice(0, 8).map(it => ({convId: it.convId, status: it.timingStatus, socketToAlertMs: it.patchToAlertMs, leadMs: it.leadMs}))),
       'khung cập nhật hội thoại: ' + (d.convPatches || 0) + ' · có người gửi: ' + (d.patchWithSender || 0) + ' · có nội dung: ' + (d.patchWithSnippet || 0),
       'khoá trong khung gần nhất: ' + (d.patchKeys || '—'),
       'nhịp quét đã chạy: ' + (d.ticks || 0) + ' lần',
