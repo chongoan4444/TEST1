@@ -344,6 +344,54 @@ const diag = () => window.__radar.debug().diag;
   check(!!own && own.hasBody, 'request tự dựng có body type=ALL,UNREAD');
   st().listReq = savedReq;
 
+  // ---- 16. socket RIÊNG của Pancake (Phoenix vsn=2.0.0) — 1.7.0 không nghe vì chỉ lọc facebook.com
+  const ws2 = new window.WebSocket('wss://pancake.vn/socket/websocket?vsn=2.0.0');
+  await sleep(120);
+  const fBefore = diag().frames;
+  const convPhx = {
+    id: PAGE + '_555444333', page_id: PAGE, from_psid: '555444333',
+    customers: [{ id: 'u5', fb_id: '555444333', name: 'Khách Phoenix' }],
+    snippet: 'Chốt đơn nhé shop', updated_at: new Date().toISOString(),
+    last_sent_by: { id: '555444333', name: 'Khách Phoenix' }
+  };
+  ws2.dispatch('message', JSON.stringify([null, '2', 'conversation:' + PAGE, 'conversation_updated', { conversation: convPhx }]));
+  await sleep(200);
+  check(diag().frames === fBefore + 1, 'nghe được socket riêng của Pancake (không phải facebook.com)');
+  check(items().some(i => i.name === 'Khách Phoenix'), 'khung Phoenix có hội thoại -> báo đúng khách');
+  check((diag().phxEvents.conversation_updated || 0) >= 1, 'chẩn đoán ghi lại tên event của socket Pancake');
+
+  ws2.dispatch('message', JSON.stringify([null, '3', 'conversation:' + PAGE, 'new_message',
+    { message: { id: 'm1', conversation_id: PAGE + '_555444333', sender_id: '555444333', content: 'Giao chiều nay giúp em' } }]));
+  await sleep(200);
+  check(items().some(i => i.snippet === 'Giao chiều nay giúp em'), 'khung tin nhắn trong socket Pancake -> báo tin khách');
+
+  ws2.dispatch('message', JSON.stringify([null, '4', 'conversation:' + PAGE, 'new_message',
+    { message: { id: 'm2', conversation_id: PAGE + '_555444333', sender_id: PAGE, content: 'Dạ shop gửi ngay' } }]));
+  await sleep(200);
+  check(!items().some(i => i.snippet === 'Dạ shop gửi ngay'), 'tin shop trong socket Pancake -> KHÔNG báo');
+
+  // ---- 17. dạng tin nhắn THẬT của Pancake (from.id + original_message + inserted_at)
+  ws2.dispatch('message', JSON.stringify([null, '5', 'conversation:' + PAGE, 'new_message', {
+    message: {
+      id: 'real1', message: '<div>Chị ơi hôm nay MIỄN SHIP</div>', original_message: 'Chị ơi hôm nay MIỄN SHIP',
+      from: { id: '555444333', name: 'Khách Phoenix' }, inserted_at: new Date().toISOString(),
+      page_id: PAGE, conversation_id: PAGE + '_555444333'
+    }
+  }]));
+  await sleep(200);
+  check(items().some(i => i.snippet === 'Chị ơi hôm nay MIỄN SHIP'), 'dạng tin nhắn thật (from.id + original_message) -> báo');
+
+  ws2.dispatch('message', JSON.stringify([null, '6', 'conversation:' + PAGE, 'new_message', {
+    message: {
+      id: 'old1', original_message: 'Tin cũ từ hai giờ trước',
+      from: { id: '555444333', name: 'Khách Phoenix' },
+      inserted_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+      page_id: PAGE, conversation_id: PAGE + '_555444333'
+    }
+  }]));
+  await sleep(200);
+  check(!items().some(i => i.snippet === 'Tin cũ từ hai giờ trước'), 'tin cũ đẩy lên khi mở hội thoại -> không báo');
+
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
   check(window.__pageMsg >= 6, 'listener của trang vẫn nhận đủ khung (' + window.__pageMsg + ')');

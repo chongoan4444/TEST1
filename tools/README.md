@@ -358,7 +358,41 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.7.0** (không sót tin + không chậm + chạy được với ứng dụng thật).
+Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.8.0** (không sót tin + không chậm + nghe đúng socket của Pancake).
+
+### Vì sao 1.7.0 vẫn không báo — đọc từ bảng chẩn đoán THẬT của người dùng
+
+Bảng 🔍 trên `/multi_pages` ghi:
+
+```
+socket đã thấy:
+  wss://pancake.vn/socket/websocket?vsn=2.0.0
+khung nhận: 0 · cấp tin nhắn: 0 · cấp hội thoại: 0
+request danh sách: 1 lần · tự gọi lại: 2 lần
+nguồn request: XMLHttpRequest GET — https://pancake.vn/api/v1/conversations?pages[…]
+```
+
+Ba lỗi lộ ra ngay từ đó:
+
+| Dấu hiệu | Nguyên nhân trong mã 1.7.0 |
+|---|---|
+| thấy socket nhưng **0 khung** | hook chỉ gắn listener khi url khớp `/facebook\.com\|\/chat\|lightspeed\|messenger/i`; socket của Pancake (`wss://pancake.vn/socket/websocket?vsn=2.0.0`, Phoenix) **không khớp** → không nghe gì |
+| `tự gọi lại: 2 lần` trong ~29 giây | `pollMs` 2000 nhưng chặn trùng cũng 2000 → mỗi lần sau bị chính lần trước chặn, nhịp rơi còn ~1/2 (và tệ hơn khi lệch giờ) |
+| `body học được: chưa` | trên `/multi_pages` ứng dụng dùng **GET** (không body) — bình thường, không phải lỗi |
+
+Và dữ liệu danh sách vẫn về bình thường (`danh sách: 145 hội thoại`, `bỏ 1 tin shop`) — nghĩa là phần đọc API đã đúng, chỉ thiếu **nguồn thời gian thực** và nhịp quét.
+
+### 1.8.0 sửa gì
+
+1. **Nghe MỌI socket** (trừ analytics): gắn cả `addEventListener('message')` lẫn `onmessage`, nên socket Pancake được đọc.
+2. **Hiểu khung Phoenix** `[join_ref, ref, topic, event, payload]`:
+   - ghi lại **tên topic + event** vào chẩn đoán (không đoán tên event);
+   - `payload` được dò đệ quy: gặp đối tượng giống **hội thoại** (`from_psid` + `snippet`/`updated_at`) thì đưa vào đúng đường xử lý danh sách (biết chiều nhờ `last_sent_by`); gặp đối tượng giống **tin nhắn** (`{ from:{id}, original_message, conversation_id, inserted_at }` — đúng dạng thật trong `loaddanhsach.har`) thì báo ngay.
+3. **Không báo lịch sử**: tin có `inserted_at` cũ hơn 5 phút bị bỏ (khi mở hội thoại, server đẩy cả loạt tin cũ).
+4. **Nhịp quét đúng**: khoảng chặn = `pollMs − 200 ms`, thêm `cache: 'no-store'` để không dùng bản cache.
+5. **Đếm được mọi thứ**: `gọi lại: thành công · HTTP lỗi · JSON lỗi · bỏ vì quá sát nhịp · tab ẩn`.
+6. **Nhịp tim 30 giây** trong nhật ký: `💓 30 giây: quét N lần · danh sách M lần · khung K · bỏ X tin shop`.
+7. **🔍 hiện thêm**: `socket topics`, `socket events`, `khung thô gần nhất` (3 khung cuối, cắt 240 ký tự) — đủ để đối chiếu nếu còn sai.
 
 ### Vì sao 1.6.0 vẫn “không hoạt động” — bằng chứng trong repo
 
@@ -501,7 +535,8 @@ Kiểm thử trên dữ liệu thật: `node tools/test_radar_real.js` — **19 
 (`demo/real_dom_fixture.html`) + payload thật 41 hội thoại (`batmesss.har` → `POST /api/v1/conversations`),
 ứng dụng gửi request bằng XMLHttpRequest như thật.
 
-Kiểm thử: `node tools/test_radar.js` — **50 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
+Kiểm thử: `node tools/test_radar.js` — **57 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
 `POST /api/v1/conversations`, kích hoạt theo giao diện (đo được ~0,15 giây), tự gọi lại,
-**trang báo có tin chưa đọc → gọi riêng trang và báo đúng khách ngoài trang đầu**, và
-**hai tin trùng nội dung vẫn báo đủ 2 lần** (phân biệt bằng `mid`).
+**trang báo có tin chưa đọc → gọi riêng trang và báo đúng khách ngoài trang đầu**, **hai tin trùng nội dung vẫn báo đủ 2 lần** (phân biệt bằng `mid`),
+**socket Phoenix của Pancake** (`wss://pancake.vn/socket/websocket?vsn=2.0.0`) và **dạng tin nhắn thật**
+(`from.id` + `original_message` + `inserted_at`), kèm kiểm tra tin cũ không bị báo.
