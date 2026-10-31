@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.5.0
+// @version      2.5.1
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.5.0';
+  const VERSION = '2.5.1';
 
   const DEFAULTS = {
     on: true,
@@ -1103,10 +1103,11 @@
   // 6. BẢNG
   // ======================================================================
   const CSS = `
-  .__rd_fab{position:fixed;right:16px;bottom:96px;z-index:2147483000;width:46px;height:46px;border-radius:50%;
+  .__rd_fab{position:fixed;right:16px;bottom:96px;z-index:2147483000;width:24px;height:24px;border-radius:50%;
     background:#0ea5e9;color:#fff;border:0;cursor:pointer;box-shadow:0 4px 14px rgba(14,165,233,.45);font-size:20px}
-  .__rd_fab{background:#b91c1c!important;border:3px solid #fecaca!important;box-shadow:0 0 12px #ef444466;touch-action:none;cursor:grab}
+  .__rd_fab{background:#b91c1c!important;border:2px solid #fecaca!important;box-shadow:0 0 12px #ef444466;touch-action:none;cursor:grab}
   .__rd_fab:active{cursor:grabbing}
+  .__rd_fab .n{display:none!important}
   .__rd_fab.signal{background:#16a34a!important;border-color:#bbf7d0!important;animation:__rd_lamp .35s steps(2,end) infinite}
   @keyframes __rd_lamp{50%{background:#86efac;box-shadow:0 0 24px #22c55e}}
   .__rd_fab .n{position:absolute;top:-4px;right:-4px;background:#e11d48;color:#fff;border-radius:10px;font-size:11px;
@@ -1161,8 +1162,8 @@
 
   function placeLamp() {
     if (!state.fab || !CFG.lampPos) return;
-    const x = Math.max(0, Math.min(Number(CFG.lampPos.x) || 0, Math.max(0, window.innerWidth - 46)));
-    const y = Math.max(0, Math.min(Number(CFG.lampPos.y) || 0, Math.max(0, window.innerHeight - 46)));
+    const x = Math.max(0, Math.min(Number(CFG.lampPos.x) || 0, Math.max(0, window.innerWidth - 24)));
+    const y = Math.max(0, Math.min(Number(CFG.lampPos.y) || 0, Math.max(0, window.innerHeight - 24)));
     Object.assign(state.fab.style, {left:x + 'px', top:y + 'px', right:'auto', bottom:'auto'});
   }
 

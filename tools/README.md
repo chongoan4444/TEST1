@@ -1,3 +1,7 @@
+## Radar 2.5.1 — đèn nhỏ 24 px
+
+Thu đèn 46 → 24 px, viền 2 px, ẩn số đếm trên đèn cho gọn. Giữ kéo thả, lưu vị trí và nháy xanh. Giới hạn viewport theo kích thước mới. Không thay đổi đường nhận tin; chưa có bằng chứng cải thiện độ trễ từ server/DOM.
+
 ## Radar 2.5.0 — đèn kéo thả khi thu bảng
 
 - Nút ✕ thu bảng, không tắt radar. Đèn đỏ là trạng thái chờ, **không phải báo lỗi kết nối**. Bấm đèn để mở lại bảng.
