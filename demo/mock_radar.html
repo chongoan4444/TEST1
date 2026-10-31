@@ -40,12 +40,13 @@
     <div class="btns">
       <button class="pri" id="bCust">Khách nhắn</button>
       <button id="bShop">Shop trả lời</button>
+      <button id="bThread">Khung cấp hội thoại (không rõ chiều)</button>
       <button id="bMulti">Khung gộp nhiều hội thoại</button>
       <button id="bReal">Khung THẬT từ HAR</button>
     </div>
     <div class="hint">
-      “Khách nhắn” bắn khung websocket <b>trước</b>, 1,2 giây sau mới chèn dòng vào danh sách —
-      đúng ý “báo trước khi có tin nhắn tới”.<br>
+      “Khách nhắn” bắn khung websocket <b>trước</b>, 1,2 giây sau mới chèn dòng vào danh sách.
+      “Shop trả lời” có <code>sender = page id</code> → <b>không</b> được báo.<br>
       Console: <code>__radar.debug()</code>, <code>__radar.help()</code>.
     </div>
   </div>
@@ -87,7 +88,9 @@ window.WebSocket = class FakeWS {
 const convs = PEOPLE.map((p, i) => ({
   id: PAGE + '_' + p.psid, page_id: PAGE, from_psid: p.psid, type: 'INBOX',
   customers: [{ id: 'u' + i, fb_id: p.psid, name: p.name }],
-  snippet: SNIPPETS[i] || '', updated_at: '2026-10-31T0' + (2 + i) + ':00:00Z', last_sent_by: 'customer'
+  snippet: SNIPPETS[i] || '', updated_at: '2026-10-31T0' + (2 + i) + ':00:00Z',
+  // last_sent_by là OBJECT đúng như dữ liệu thật: id = psid khách nếu khách nhắn, = page id nếu shop gửi
+  last_sent_by: { id: p.psid, name: p.name }
 }));
 const realFetch = (typeof window.fetch === 'function') ? window.fetch.bind(window) : null;
 window.fetch = function (input) {
@@ -107,8 +110,21 @@ window.__ws = new WebSocket('wss://edge-chat.facebook.com/chat?demo=1');
 // ---------------------------------------------------------------- nạp danh sách để radar biết TÊN
 try { fetch('/api/v1/pages/' + PAGE + '/conversations?unread_first=true&mode=OR', { method: 'POST' }); } catch (e) { /* demo ngoài trình duyệt */ }
 
-function frame(psid, text) {
-  return 'deleteThenInsertThread",[19,"' + Date.now() + '"],[19,"-1"],"' + text + '",[9],"entity_id=' + psid + '&"';
+/** khung insertMessage đúng dạng thật: có psid hội thoại + SENDER ID quyết định chiều tin */
+function frame(psid, text, fromCustomer) {
+  const q = String.fromCharCode(92) + '"';   // \"
+  const sender = fromCustomer ? psid : PAGE;
+  return '[5,' + q + 'insertMessage' + q + ',' + q + text + q + ',[9],[19,' + q + '80' + q + '],[19,' + q + psid + q +
+    '],[19,' + q + '0' + q + '],[19,' + q + '1' + q + '],[19,' + q + '1' + q + '],[9],' +
+    q + 'mid.$demo' + q + ',' + q + '75178901770' + q + ',[19,' + q + sender + q + ']';
+}
+
+function bumpList(psid, snippet, fromCustomer) {
+  const cv = convs.find(c => c.from_psid === psid);
+  if (!cv) return;
+  cv.snippet = snippet;
+  cv.updated_at = new Date().toISOString();
+  cv.last_sent_by = fromCustomer ? { id: psid, name: cv.customers[0].name } : { id: PAGE, name: 'Shop' };
 }
 
 let n = 0;
@@ -119,14 +135,18 @@ function pushNewRow(p, snippet) {
 }
 
 document.getElementById('bCust').onclick = () => {
-  const p = PEOPLE[0];
+  const p = PEOPLE[n % PEOPLE.length];
   const text = 'Còn size ' + ['M', 'L', 'XL'][n % 3] + ' không shop ơi';
-  window.__ws.dispatch('message', frame(p.psid, text));   // websocket tới TRƯỚC
-  setTimeout(() => pushNewRow(p, text), 1200);            // 1,2s sau danh sách mới vẽ lại
+  window.__ws.dispatch('message', frame(p.psid, text, true));   // websocket tới TRƯỚC
+  bumpList(p.psid, text, true);
+  setTimeout(() => pushNewRow(p, text), 1200);                  // 1,2s sau danh sách mới vẽ lại
 };
 
 document.getElementById('bShop').onclick = () => {
-  window.__ws.dispatch('message', frame(PEOPLE[1].psid, 'Bạn: Em gửi bảng size ngay ạ'));
+  const p = PEOPLE[1];
+  const text = 'Dạ em gửi bảng size ngay ạ';
+  window.__ws.dispatch('message', frame(p.psid, text, false));  // sender = page id -> phải bị bỏ
+  bumpList(p.psid, 'Bạn: ' + text, false);
 };
 
 document.getElementById('bMulti').onclick = () => {
@@ -135,10 +155,16 @@ document.getElementById('bMulti').onclick = () => {
     '"entity_id=777000111222&entity_id=888000222333&"name","ad_id.120259999999999"');
 };
 
+document.getElementById('bThread').onclick = () => {
+  window.__ws.dispatch('message',
+    'deleteThenInsertThread",[19,"1"],[19,"-1"],"Tin chỉ có ở cấp hội thoại",[9],"entity_id=' + PEOPLE[2].psid + '&"');
+};
+
 document.getElementById('bReal').onclick = async () => {
-  const res = await fetch('../demo/ws_frames.json');
+  const res = await realFetch('../demo/ws_frames.json');
   const data = await res.json();
-  const bin = atob(data.frames[0].b64);
+  const f = data.frames.find(x => x.kind === 'message-khach') || data.frames[0];
+  const bin = atob(f.b64);
   const buf = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   window.__ws.dispatch('message', buf.buffer);

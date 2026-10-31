@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Pancake - Radar tin nhắn tới (báo trước)
+// @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.1.0
-// @description  Báo tin nhắn tới: tên khách + nội dung + vị trí dòng. Đọc websocket Facebook (báo TRƯỚC), nếu không có thì tự dự phòng bằng API danh sách + thay đổi trên giao diện. Có bảng chẩn đoán tại chỗ.
+// @version      1.3.0
+// @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
 // @match        https://*.pancake.vn/*
@@ -12,34 +12,37 @@
 // ==/UserScript==
 
 /**
- * RADAR TIN NHẮN TỚI — script riêng (không phụ thuộc script gắn nhãn).
+ * RADAR TIN NHẮN TỚI — chỉ báo tin KHÁCH gửi đến.
  *
- * Căn cứ dữ liệu thật (batmesss.har):
- *   - socket wss://edge-chat.facebook.com/chat do CHÍNH bundle pancake.vn tạo
- *     (_initiator: pancake.vn/_next/static/chunks/5003…js), 118 khung
- *   - 8 khung "deleteThenInsertThread" có psid (entity_id=…), nội dung tin, ảnh, nhãn ad_id.<số>
- *   - danh sách hội thoại: 1175/1177 id dạng <page_id>_<from_psid>
- *
- * 3 đường bắt tin (đường nào cũng chạy):
- *   1. websocket  -> báo TRƯỚC khi dòng hiện ra
- *   2. API danh sách (tự gọi lại mỗi 10 giây khi tab đang xem) -> so nội dung/updated_at
- *   3. MutationObserver trên danh sách -> dòng vừa đổi
- * Không đoán: khung gộp nhiều hội thoại thì bỏ; tin của shop bỏ (trừ khi tắt "chỉ tin tới").
+ * CĂN CỨ (kiểm trực tiếp trên batmesss.har, không suy diễn):
+ *   A. Khung websocket có lệnh insertMessage — mỗi khung 1 tin:
+ *        [5,"insertMessage","<nội dung>",[9],[19,"80"],[19,"<psid khách>"], …, "<mid.…>","<numeric id>",[19,"<SENDER ID>"]
+ *      → SENDER ID = psid khách  ⇒ tin TỚI
+ *      → SENDER ID = page id     ⇒ tin SHOP gửi đi
+ *      (đo trên 8 khung: 1 tin tới của khách, 7 tin shop gửi — khớp đúng)
+ *   B. API danh sách có last_sent_by là OBJECT:
+ *        last_sent_by = {id: "834072796450267", name: "Huyền Nguyễn Shop"}   → shop
+ *        last_sent_by = {id: "<psid>", name: "Nguyễn Thịnh"}                 → khách
+ *      → so last_sent_by.id với from_psid / page_id là biết chiều.
+ *   C. KHÔNG dùng chữ "Bạn:" làm căn cứ chính: giao diện đổi ngôn ngữ là sai ngay
+ *      (đây chính là lỗi bắt nhầm tin gửi đi ở bản 1.1.0). Chỉ dùng khi bắt buộc,
+ *      và mặc định KHÔNG báo những tin không xác định được chiều.
  */
 (function () {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.3.0';
 
   const DEFAULTS = {
     on: true,
     panel: true,
-    onlyIncoming: true,
+    onlyIncoming: true,      // chỉ báo tin khách gửi tới
+    allowUnknown: false,     // false = không báo tin không xác định được chiều
     max: 8,
     notify: false,
-    pollMs: 10000,        // tự gọi lại danh sách (chỉ khi tab đang xem)
-    watchDom: true,
-    watchList: true
+    pollMs: 10000,           // tự gọi lại danh sách (chỉ khi tab đang xem)
+    watchList: true,         // dự phòng bằng API danh sách (chiều chính xác)
+    watchDom: false          // theo dõi giao diện: KHÔNG biết chiều -> mặc định tắt
   };
 
   const CFG = (function () {
@@ -53,23 +56,26 @@
 
   const state = {
     people: new Map(),   // psid  -> { name, convId, avatar }
-    convs: new Map(),    // convId -> { psid, name, snippet, updated_at, lastSentBy }
-    domSnap: new Map(),  // convId -> snippet lần trước
+    convs: new Map(),    // convId -> { psid, name, snippet, updated_at, lastSentById }
+    domSnap: new Map(),
     items: [],
     seeded: false,
     domReady: false,
-    wsAlive: false,
     wsHits: 0,
     listHits: 0,
     domHits: 0,
-    listReq: null,       // request danh sách gần nhất để tự gọi lại
+    listReq: null,
     panel: null,
     fab: null,
     diagOpen: false,
-    diag: { hook: false, hookErr: '', sockets: [], frames: 0, parsed: 0, lastFrameAt: 0, lastErr: '' }
+    diag: {
+      hook: false, hookErr: '', sockets: [], frames: 0,
+      msgFrames: 0, threadFrames: 0, parsed: 0,
+      skippedOut: 0, skippedUnknown: 0, lastFrameAt: 0, lastErr: '', lastSender: ''
+    }
   };
 
-  const LOG = (...a) => console.log('%c[radar]', 'color:#0ea5e9;font-weight:600', ...a);
+  const LOG = (...a) => { try { console.log('%c[radar]', 'color:#0ea5e9;font-weight:600', ...a); } catch (e) { /* ignore */ } };
 
   // ======================================================================
   // 1. GIẢI MÃ KHUNG WEBSOCKET
@@ -90,19 +96,50 @@
       const p = String(keys[i]).split('_')[0];
       if (/^\d{5,}$/.test(p)) return p;
     }
-    const rowsArr = rows();
-    for (let i = 0; i < rowsArr.length; i++) {
-      const p = String(convIdOfRow(rowsArr[i])).split('_')[0];
+    const rs = rows();
+    for (let i = 0; i < rs.length; i++) {
+      const p = String(convIdOfRow(rs[i])).split('_')[0];
       if (/^\d{5,}$/.test(p)) return p;
     }
     return '';
   }
 
-  /** tách psid + nội dung từ khung; null nếu không chắc (khung gộp nhiều hội thoại) */
-  function parseFrame(text, pageId) {
-    if (!text || text.length > 200000) return null;
-    if (text.indexOf('deleteThenInsertThread') < 0) return null;
+  /**
+   * Khung CẤP TIN NHẮN (insertMessage): biết chính xác ai gửi.
+   * Chỉ nhận khi khung có đúng 1 tin — nhiều tin trong 1 khung thì bỏ (không đoán).
+   */
+  function parseMessageFrame(text, pageId) {
+    if (text.indexOf('insertMessage') < 0) return null;
+    const re = /\[5,\\"insertMessage\\",/g;
+    const at = [];
+    let m;
+    while ((m = re.exec(text))) { at.push(m.index); if (at.length > 1) return null; }
+    if (!at.length) return null;
 
+    const seg = text.slice(at[0], at[0] + 1600);
+    const mt = /\[5,\\"insertMessage\\",\\"((?:[^"\\]|\\.)*?)\\"/.exec(seg);
+    if (!mt) return null;
+    const mp = /\[9\],\[19,\\"80\\"\],\[19,\\"(\d+)\\"\]/.exec(seg);       // psid của hội thoại
+    if (!mp) return null;
+    const ms = /\\"mid\.[^"\\]*\\",\\"\d+\\",\[19,\\"(\d+)\\"\]/.exec(seg);  // SENDER ID
+    const sender = ms ? ms[1] : '';
+    const snippet = unesc(mt[1]).replace(/\s+/g, ' ').trim();
+    if (!snippet) return null;
+
+    let outgoing = null;
+    if (sender) outgoing = pageId ? (sender === pageId) : (sender !== mp[1] ? null : false);
+    return {
+      psid: mp[1], snippet, avatar: '', ads: [], at: Date.now(),
+      sender, outgoing: outgoing === true, dirKnown: outgoing !== null, kind: 'message'
+    };
+  }
+
+  /**
+   * Khung CẤP HỘI THOẠI (deleteThenInsertThread): có psid + đoạn tin cuối, KHÔNG có sender.
+   * Dùng khi không bắt được khung cấp tin nhắn; chiều chỉ suy ra từ tiền tố "Bạn:" nên yếu.
+   */
+  function parseThreadFrame(text, pageId) {
+    if (text.indexOf('deleteThenInsertThread') < 0) return null;
     const psids = [];
     let m;
     const reE = /entity_id=(\d{5,})/g;
@@ -110,7 +147,7 @@
       if (pageId && m[1] === pageId) continue;
       if (psids.indexOf(m[1]) < 0) {
         psids.push(m[1]);
-        if (psids.length > 1) return null;   // khung gộp -> bỏ
+        if (psids.length > 1) return null;   // khung gộp nhiều hội thoại -> bỏ
       }
     }
     if (psids.length !== 1) return null;
@@ -125,13 +162,16 @@
     const ma = /(https:\/\/scontent[^"'\s]+)/.exec(clean);
     if (ma) avatar = ma[1];
 
-    const outgoing = /^Bạn\s*:|^Bạn\s+đã\s+(gửi|trả lời|phản hồi)/i.test(snippet);
-
     const ads = [];
     const reA = /ad_id\.(\d{5,})/g;
     while ((m = reA.exec(text))) if (ads.indexOf(m[1]) < 0) ads.push(m[1]);
 
-    return { psid: psids[0], snippet, avatar, outgoing, ads, at: Date.now() };
+    // chỉ là suy đoán -> dirKnown = false, trừ khi có tiền tố rõ ràng của shop
+    const outPrefix = /^Bạn\s*:|^Bạn\s+đã\s+(gửi|trả lời|phản hồi)|^You\s*:|^You\s+sent/i.test(snippet);
+    return {
+      psid: psids[0], snippet, avatar, ads, at: Date.now(),
+      sender: '', outgoing: outPrefix, dirKnown: outPrefix, kind: 'thread'
+    };
   }
 
   // ======================================================================
@@ -159,14 +199,27 @@
 
   function onFrameText(text) {
     if (!CFG.on) return;
-    const hit = parseFrame(text, pageIdNow());
+    const pageId = pageIdNow();
+    let hit = parseMessageFrame(text, pageId);
+    if (hit) state.diag.msgFrames++;
+    else { hit = parseThreadFrame(text, pageId); if (hit) state.diag.threadFrames++; }
     if (!hit) return;
+
     state.diag.parsed++;
     state.diag.lastFrameAt = Date.now();
-    state.wsAlive = true;
-    if (CFG.onlyIncoming && hit.outgoing) return;
-    state.wsHits++;
-    publish(hit, 'websocket');
+    state.diag.lastSender = hit.sender || (hit.dirKnown ? 'tiền tố' : '?');
+    route(hit, 'websocket');
+  }
+
+  /** quyết định có báo hay không, dựa đúng vào chiều tin */
+  function route(hit, via) {
+    if (CFG.onlyIncoming) {
+      if (hit.dirKnown && hit.outgoing) { state.diag.skippedOut++; return; }
+      if (!hit.dirKnown && !CFG.allowUnknown) { state.diag.skippedUnknown++; return; }
+    }
+    if (via === 'websocket') state.wsHits++;
+    if (via === 'giao diện') state.domHits++;
+    publish(hit, via);
   }
 
   (function hookWebSocket() {
@@ -191,19 +244,19 @@
       state.diag.hook = true;
     } catch (e) {
       state.diag.hookErr = String(e && e.message || e);
-      try { LOG('không treo được hook websocket:', e); } catch (e2) { /* ignore */ }
+      LOG('không treo được hook websocket:', e);
     }
   })();
 
   // ======================================================================
-  // 3. API DANH SÁCH (lấy tên + dự phòng khi không có websocket)
+  // 3. API DANH SÁCH — chiều tin lấy từ last_sent_by
   // ======================================================================
   function isListUrl(url) {
     const u = String(url || '').split('#')[0];
     return /\/api\/v1\/pages\/[^/]+\/conversations(\?|$)/.test(u) && !/\/messages/.test(u);
   }
 
-  function ingestList(json, source) {
+  function ingestList(json) {
     if (!json || typeof json !== 'object') return;
     const arr = json.conversations || json.data || [];
     if (!Array.isArray(arr) || !arr.length) return;
@@ -213,6 +266,7 @@
       if (!cv || typeof cv !== 'object') return;
       const id = String(cv.id || cv.conversation_id || '');
       if (!id) return;
+      const pageId = String(cv.page_id || id.split('_')[0] || '');
       const psid = String(cv.from_psid || (id.indexOf('_') > 0 ? id.split('_')[1] : ''));
       let name = '';
       const cs = cv.customers;
@@ -221,22 +275,22 @@
       const avatar = (Array.isArray(cs) && cs[0] && (cs[0].avatar || cs[0].picture)) || cv.from_avatar || '';
       const snippet = String(cv.snippet || '');
       const updated = String(cv.updated_at || '');
-      const sentBy = String(cv.last_sent_by || '');
+      // last_sent_by là OBJECT: {id, name, …} -> id chính là psid khách hoặc id trang
+      const sb = cv.last_sent_by;
+      const sbId = (sb && typeof sb === 'object') ? String(sb.id || sb.admin_id || '') : '';
       const prev = state.convs.get(id);
-      state.convs.set(id, { psid, name, snippet, updated_at: updated, lastSentBy: sentBy });
+      state.convs.set(id, { psid, name, snippet, updated_at: updated, lastSentById: sbId });
       if (psid && name) state.people.set(psid, { name, convId: id, avatar: avatar || (state.people.get(psid) || {}).avatar || '' });
+
       if (state.seeded && prev && (prev.updated_at !== updated || prev.snippet !== snippet) && snippet) {
-        fresh.push({ psid, name, snippet, sentBy });
+        let outgoing = null;
+        if (sbId && psid) outgoing = (sbId === psid) ? false : (pageId && sbId === pageId ? true : null);
+        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list' });
       }
     });
 
     if (!state.seeded) { state.seeded = true; render(); return; }
-
-    // nếu websocket đã hoạt động thì nó là nguồn chính; ở đây chỉ bổ sung tin mà WS không thấy
-    fresh.forEach(f => {
-      if (CFG.onlyIncoming && /page|admin|shop|self/i.test(f.sentBy)) return;
-      publish({ psid: f.psid, snippet: f.snippet, avatar: '', outgoing: false, ads: [], at: Date.now() }, source || 'danh sách');
-    });
+    if (CFG.watchList) fresh.forEach(f => route(f, 'danh sách'));
     render();
   }
 
@@ -247,8 +301,8 @@
       const p = _fetch.apply(this, arguments);
       try {
         if (isListUrl(url)) {
-          try { state.listReq = { url: url, init: init || (input && input.method ? input : null) }; } catch (e) { /* ignore */ }
-          p.then(r => { let c; try { c = r.clone(); } catch (e) { return; } c.json().then(j => ingestList(j, 'danh sách')).catch(() => {}); }).catch(() => {});
+          try { state.listReq = { url: url, init: init || null }; } catch (e) { /* ignore */ }
+          p.then(r => { let c; try { c = r.clone(); } catch (e) { return; } c.json().then(j => ingestList(j)).catch(() => {}); }).catch(() => {});
         }
       } catch (e) { /* ignore */ }
       return p;
@@ -262,23 +316,20 @@
     const xhr = this;
     if (isListUrl(xhr.__rdUrl)) {
       try { state.listReq = { url: xhr.__rdUrl, init: null }; } catch (e) { /* ignore */ }
-      xhr.addEventListener('load', function () { try { ingestList(JSON.parse(xhr.responseText), 'danh sách'); } catch (e) { /* ignore */ } });
+      xhr.addEventListener('load', function () { try { ingestList(JSON.parse(xhr.responseText)); } catch (e) { /* ignore */ } });
     }
     return _send.apply(this, arguments);
   };
 
-  // tự gọi lại danh sách (dự phòng khi websocket không hoạt động)
   function pollList() {
     if (!CFG.on || !CFG.watchList || !state.listReq) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    try {
-      fetch(state.listReq.url, state.listReq.init ? { method: 'POST', credentials: 'include' } : { method: 'GET', credentials: 'include' })
-        .catch(() => {});
-    } catch (e) { /* ignore */ }
+    try { fetch(state.listReq.url, state.listReq.init ? { method: 'POST', credentials: 'include' } : { method: 'GET', credentials: 'include' }).catch(() => {}); }
+    catch (e) { /* ignore */ }
   }
 
   // ======================================================================
-  // 4. THEO DÕI GIAO DIỆN (dòng vừa đổi)
+  // 4. GIAO DIỆN (mặc định TẮT: giao diện không cho biết chiều tin)
   // ======================================================================
   function rows() {
     return Array.from(document.querySelectorAll('.conversation-list-item'));
@@ -323,9 +374,8 @@
       if (snip && snip !== prev) {
         state.domSnap.set(id, snip);
         if (!state.domReady) continue;
-        state.domHits++;
-        if (CFG.onlyIncoming && /^Bạn\s*:/.test(snip)) continue;
-        publish({ psid, snippet: snip, avatar: '', outgoing: false, ads: [], at: Date.now() }, 'giao diện');
+        const outPrefix = /^Bạn\s*:|^Bạn\s+đã\s+|^You\s*:/i.test(snip);
+        route({ psid, snippet: snip, avatar: '', ads: [], at: Date.now(), sender: '', outgoing: outPrefix, dirKnown: outPrefix, kind: 'dom' }, 'giao diện');
       }
     }
     state.domReady = true;
@@ -333,7 +383,7 @@
   }
 
   function watchDom() {
-    if (!CFG.on || !CFG.watchDom || typeof MutationObserver === 'undefined') return;
+    if (!CFG.watchDom || typeof MutationObserver === 'undefined') return;
     const tryAttach = () => {
       const list = document.querySelector('.conversation-list');
       if (!list) return false;
@@ -346,10 +396,8 @@
       mo.observe(list, { childList: true, subtree: true, characterData: true });
       return true;
     };
-    if (!tryAttach()) {
-      const t = setInterval(() => { if (tryAttach()) clearInterval(t); }, 1500);
-    }
-    scanDom();   // chụp trạng thái ban đầu
+    if (!tryAttach()) { const t = setInterval(() => { if (tryAttach()) clearInterval(t); }, 1500); }
+    scanDom();
   }
 
   // ======================================================================
@@ -364,9 +412,12 @@
     return { pos: 0, total: list.length, el: null };
   }
 
+  const normText = s => String(s || '').replace(/^(Bạn|You)\s*(:|đã|sent)\s*/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
   function publish(hit, via) {
     if (!hit || !hit.psid) return;
-    const dup = state.items.some(it => it.psid === hit.psid && it.snippet === hit.snippet && Date.now() - it.at < 20000);
+    const key = normText(hit.snippet);
+    const dup = state.items.some(it => it.psid === hit.psid && normText(it.snippet) === key && Date.now() - it.at < 20000);
     if (dup) return;
     const convId = (pageIdNow() ? pageIdNow() + '_' : '') + hit.psid;
     const know = state.people.get(hit.psid) || {};
@@ -379,7 +430,9 @@
       ads: hit.ads || [],
       via: via,
       at: hit.at || Date.now(),
-      posNow: pos.pos
+      posNow: pos.pos,
+      dirKnown: !!hit.dirKnown,
+      sender: hit.sender || ''
     };
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
@@ -395,7 +448,7 @@
   }
 
   // ======================================================================
-  // 6. GIAO DIỆN
+  // 6. BẢNG
   // ======================================================================
   const CSS = `
   .__rd_fab{position:fixed;right:16px;bottom:96px;z-index:2147483000;width:46px;height:46px;border-radius:50%;
@@ -445,7 +498,7 @@
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const timeStr = ts => { const d = new Date(ts); const p = n => String(n).padStart(2, '0'); return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()); };
-  const VIA_TEXT = { websocket: 'websocket (trước khi hiện)', 'danh sách': 'API danh sách', 'giao diện': 'giao diện (dòng vừa đổi)', 'thử': 'tin thử' };
+  const VIA_TEXT = { websocket: 'websocket', 'danh sách': 'API danh sách', 'giao diện': 'giao diện', 'thử': 'tin thử' };
 
   function render() {
     if (!document.body) return;
@@ -454,7 +507,7 @@
     if (!state.fab) {
       const b = document.createElement('button');
       b.className = '__rd_fab';
-      b.title = 'Radar tin nhắn tới';
+      b.title = 'Radar tin nhắn TỚI';
       b.textContent = '📨';
       b.appendChild(Object.assign(document.createElement('span'), { className: 'n' }));
       b.addEventListener('click', () => { CFG.panel = !CFG.panel; save(); render(); });
@@ -478,25 +531,25 @@
     p.classList.toggle('off', !CFG.panel);
 
     const d = state.diag;
-    const wsBad = d.hook ? (d.parsed ? '' : ' bad') : ' bad';
-    const stat = 'WS ' + (d.hook ? (d.sockets.length + ' socket · ' + d.frames + ' khung · ' + d.parsed + ' tin') : 'CHƯA TREO ĐƯỢC HOOK') +
-      ' · API ' + state.listHits + ' · Tên ' + state.people.size + ' · Dòng ' + rows().length;
+    const stat = (d.hook ? 'WS ' + d.sockets.length + ' socket · ' + d.msgFrames + ' tin / ' + d.threadFrames + ' hội thoại' : 'WS CHƯA TREO ĐƯỢC HOOK') +
+      ' · bỏ ' + d.skippedOut + ' tin shop' + (d.skippedUnknown ? ' · ' + d.skippedUnknown + ' chưa rõ chiều' : '') +
+      ' · API ' + state.listHits + ' · Tên ' + state.people.size;
 
     const head = '<div class="__rd_head">' +
-      '<div class="__rd_hrow"><b>📨 Tin nhắn tới</b><span class="sp"></span>' +
+      '<div class="__rd_hrow"><b>📨 Tin khách gửi tới</b><span class="sp"></span>' +
       '<button data-a="in" class="' + (CFG.onlyIncoming ? 'on' : '') + '" title="Chỉ báo tin của khách">chỉ tin tới</button>' +
       '<button data-a="notify" class="' + (CFG.notify ? 'on' : '') + '" title="Thông báo hệ thống">🔔</button>' +
       '<button data-a="test" title="Bắn một tin thử">🧪</button>' +
       '<button data-a="diag" title="Chẩn đoán">🔍</button>' +
       '<button data-a="clear" title="Xoá danh sách">🧹</button></div>' +
-      '<div class="__rd_stat' + wsBad + '">' + esc(stat) + '</div>' +
+      '<div class="__rd_stat' + (d.hook ? '' : ' bad') + '">' + esc(stat) + '</div>' +
       '<div class="__rd_diag' + (state.diagOpen ? ' open' : '') + '">' + esc(diagText()) + '</div>' +
       '</div>';
 
     const list = CFG.on ? state.items.slice(0, CFG.max) : [];
     let body = '';
     if (!CFG.on) body = '<div class="__rd_empty">Radar đang TẮT.</div>';
-    else if (!list.length) body = '<div class="__rd_empty">Chưa có tin mới. Tin sẽ hiện ở đây (kèm tên + nội dung + vị trí dòng).</div>';
+    else if (!list.length) body = '<div class="__rd_empty">Chưa có tin khách gửi tới. Tin của shop sẽ không hiện ở đây.</div>';
     else {
       body = list.map(it => {
         const pos = positionOf(it.psid, it.convId);
@@ -513,7 +566,7 @@
           '<span class="__rd_time">' + timeStr(it.at) + '</span></div>' +
           '<div class="__rd_snip">' + esc(it.snippet) + '</div>' +
           (it.ads && it.ads.length ? '<div class="__rd_ad">🔥 quảng cáo · ad_id ' + esc(it.ads[0]) + '</div>' : '') +
-          '<div class="__rd_via">nguồn: ' + esc(VIA_TEXT[it.via] || it.via) + '</div>' +
+          '<div class="__rd_via">chiều: ' + (it.dirKnown ? 'khách → shop' : 'chưa rõ') + ' · nguồn: ' + esc(VIA_TEXT[it.via] || it.via) + '</div>' +
           '</div></div>';
       }).join('');
     }
@@ -526,7 +579,7 @@
         if (a === 'in') { CFG.onlyIncoming = !CFG.onlyIncoming; save(); }
         if (a === 'clear') { state.items = []; }
         if (a === 'test') {
-          publish({ psid: '000000000000', snippet: 'Đây là tin THỬ — radar đang chạy bình thường.', avatar: '', outgoing: false, ads: [], at: Date.now() }, 'thử');
+          publish({ psid: '000000000000', snippet: 'Đây là tin THỬ — radar đang chạy bình thường.', avatar: '', outgoing: false, dirKnown: true, ads: [], at: Date.now() }, 'thử');
         }
         if (a === 'diag') { state.diagOpen = !state.diagOpen; }
         if (a === 'notify') {
@@ -551,18 +604,18 @@
 
   function diagText() {
     const d = state.diag;
-    const lines = [
+    return [
       'phiên bản: ' + VERSION,
       'trang: ' + location.href.slice(0, 120),
       'hook websocket: ' + (d.hook ? 'đã treo' : 'THẤT BẠI') + (d.hookErr ? ' — ' + d.hookErr : ''),
       'socket đã thấy: ' + (d.sockets.length ? '\n  ' + d.sockets.join('\n  ') : 'chưa có'),
-      'khung nhận: ' + d.frames + ' · khung đọc được: ' + d.parsed,
-      'lần cuối có tin: ' + (d.lastFrameAt ? new Date(d.lastFrameAt).toLocaleTimeString() : '—'),
+      'khung nhận: ' + d.frames + ' · cấp tin nhắn: ' + d.msgFrames + ' · cấp hội thoại: ' + d.threadFrames,
+      'bỏ vì là tin shop: ' + d.skippedOut + ' · bỏ vì chưa rõ chiều: ' + d.skippedUnknown,
+      'lần cuối có tin: ' + (d.lastFrameAt ? new Date(d.lastFrameAt).toLocaleTimeString() : '—') + ' · sender cuối: ' + (d.lastSender || '—'),
       'API danh sách: ' + state.listHits + ' lần · tên đã biết: ' + state.people.size,
       'dòng trong danh sách: ' + rows().length,
       'lỗi gần nhất: ' + (d.lastErr || '—')
-    ];
-    return lines.join('\n');
+    ].join('\n');
   }
 
   function focusRow(psid, convId) {
@@ -589,8 +642,9 @@
     debug: () => ({
       version: VERSION, url: location.href, on: CFG.on,
       wsHits: state.wsHits, listHits: state.listHits, domHits: state.domHits,
-      wsAlive: state.wsAlive, people: state.people.size, convs: state.convs.size,
-      items: state.items.length, rows: rows().length, diag: JSON.parse(JSON.stringify(state.diag))
+      people: state.people.size, convs: state.convs.size,
+      items: state.items.length, rows: rows().length,
+      diag: JSON.parse(JSON.stringify(state.diag))
     }),
     set(patch) { Object.assign(CFG, patch); save(); render(); return CFG; },
     clear() { state.items = []; render(); },
@@ -598,19 +652,16 @@
     feed(b64) { try { readWsData(typeof b64 === 'string' ? atob(b64) : b64); } catch (e) { state.diag.lastErr = 'feed: ' + e.message; return false; } return true; },
     help() {
       console.log('%c[radar] cách dùng', 'color:#0ea5e9;font-weight:600');
-      console.log('  __radar.debug()   — trạng thái + thông tin chẩn đoán');
+      console.log('  __radar.debug()   — trạng thái + chẩn đoán');
       console.log('  __radar.set({on:false}) — tắt radar');
-      console.log('  __radar.set({onlyIncoming:false}) — báo cả tin của shop');
-      console.log('  __radar.set({watchList:false, watchDom:false}) — chỉ dùng websocket');
+      console.log('  __radar.set({onlyIncoming:false}) — hiện cả tin shop (để đối chiếu)');
+      console.log('  __radar.set({allowUnknown:true}) — cho phép báo tin chưa rõ chiều');
       console.log('  __radar.clear() · __radar.scan() · __radar.feed("<base64>")');
     }
   };
 
   (function boot() {
-    const go = () => {
-      try { render(); } catch (e) { /* ignore */ }
-      try { watchDom(); } catch (e) { /* ignore */ }
-    };
+    const go = () => { try { render(); } catch (e) { /* ignore */ } try { watchDom(); } catch (e) { /* ignore */ } };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
     else go();
     window.addEventListener('load', go);
@@ -618,7 +669,7 @@
     setInterval(() => { if (CFG.on) pollList(); }, Math.max(5000, Number(CFG.pollMs) || 10000));
     setInterval(() => {
       if (!CFG.on) return;
-      try { scanDom(); } catch (e) { /* ignore */ }
+      try { if (CFG.watchDom) scanDom(); } catch (e) { /* ignore */ }
       if (state.items.length) render();
     }, 4000);
   })();

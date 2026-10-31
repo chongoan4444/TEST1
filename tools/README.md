@@ -356,42 +356,45 @@ Kết quả: nhãn **QC** có thể hiện ngay khi dòng vừa xuất hiện, k
 Đọc thêm tin nhắn vẫn giữ nguyên (để nhận BV/LV và xác nhận lại).
 Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi thứ tự quay về như 3.7.0, không lỗi.
 
-## 📨 Radar tin nhắn tới — script RIÊNG (`userscripts/pancake-new-message-radar.user.js`)
+## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Userscript độc lập, báo tin nhắn tới: **tên khách · nội dung · vị trí dòng sẽ xuất hiện**.
-Bản **1.1.0** có 3 đường bắt tin để không bao giờ “im lặng”:
+Báo **tin khách gửi đến** (không báo tin shop gửi đi): tên khách · nội dung · vị trí dòng.
 
-| # | Nguồn | Thời điểm báo | Ghi chú |
-|---|---|---|---|
-| 1 | websocket `edge-chat.facebook.com/chat` | **trước** khi dòng hiện ra | nguồn chính, đọc `deleteThenInsertThread` |
-| 2 | tự gọi lại API danh sách mỗi 10 giây | sau ~1–10 giây | so `snippet` / `updated_at` |
-| 3 | MutationObserver trên danh sách | ngay khi dòng đổi | so nội dung từng dòng |
+### Căn cứ xác định CHIỀU tin (kiểm trên `batmesss.har`)
 
-Trong bảng có dòng trạng thái và nút **🔍 chẩn đoán**:
+| Nguồn | Trường dùng | Kết luận |
+|---|---|---|
+| Khung websocket cấp tin nhắn (`insertMessage`) | `…,"<mid.…>","<id số>",[19,"<SENDER ID>"]` | `SENDER ID = psid khách` → tin tới · `= page id` → tin shop |
+| API danh sách | `last_sent_by` là **object** `{id, name, …}` | `id = from_psid` → tin tới · `id = page_id` → tin shop |
+| Khung cấp hội thoại (`deleteThenInsertThread`) | chỉ có nội dung, **không** có sender | **chưa rõ chiều** → mặc định KHÔNG báo |
+| Giao diện | không có trường chiều | mặc định TẮT (`watchDom:false`) |
 
-```
-WS 1 socket · 118 khung · 8 tin · API 12 · Tên 300 · Dòng 31
-```
+Đo trên 8 khung `insertMessage` của HAR: **1 tin của khách** (sender `61594409994701` = psid)
+và **7 tin của shop** (sender `834072796450267` = page id) — khớp đúng 8/8.
 
-- `WS 0 socket` → trang không tạo socket Facebook trong phiên đó (vẫn có tin qua đường 2–3)
-- `hook websocket: THẤT BẠI` → có script khác chặn, xem `lỗi gần nhất`
-- **🧪** = bắn tin thử để kiểm tra bảng có hoạt động không
+> Bản 1.1.0 đoán chiều theo chữ **“Bạn:”** trong đoạn tin — sai ngay khi giao diện đổi ngôn ngữ
+> hoặc khi Pancake cắt mất tiền tố, nên báo lẫn tin gửi đi. Bản 1.3.0 bỏ cách đó.
 
-| Việc | Cách làm |
+### Bảng radar
+
+Dòng trạng thái: `WS 1 socket · 12 tin / 8 hội thoại · bỏ 7 tin shop · 3 chưa rõ chiều · API 12 · Tên 300`
+
+| Nút | Việc |
 |---|---|
-| Tên khách | psid ghép với API danh sách, thiếu thì lấy tên trên dòng chat |
-| Nội dung | `snippet` trong khung (bỏ escape `\uXXXX`) |
-| Vị trí | dòng đang có → `dòng 3 → #1`; chưa có → `dòng mới #1` |
-| Nguồn quảng cáo | nhãn `ad_id.<số>` trong khung → `🔥 quảng cáo` |
-| Không đoán | khung gộp nhiều psid → bỏ; tin của shop (`Bạn:`) → bỏ (nút “chỉ tin tới”) |
+| 📨 | ẩn/hiện bảng |
+| **chỉ tin tới** | bật/tắt lọc (tắt để xem cả tin shop khi đối chiếu) |
+| 🔔 | thông báo hệ thống |
+| 🧪 | bắn tin thử để kiểm tra bảng |
+| 🔍 | mở bảng chẩn đoán (số khung, sender cuối, số tin bị bỏ…) |
+| 🧹 | xoá danh sách |
 
 ```js
-__radar.debug()                     // trạng thái + diag
-__radar.set({on:false})             // tắt
-__radar.set({onlyIncoming:false})   // báo cả tin shop
-__radar.set({watchList:false, watchDom:false})  // chỉ dùng websocket
-__radar.clear() · __radar.scan() · __radar.feed('<base64>')
+__radar.debug()                      // trạng thái + chẩn đoán
+__radar.set({onlyIncoming:false})    // hiện cả tin shop
+__radar.set({allowUnknown:true})     // cho báo cả tin chưa rõ chiều (mặc định tắt)
+__radar.set({on:false})              // tắt radar
 ```
 
-Kiểm thử: `node tools/test_radar.js` (28 mục, dùng khung thật `demo/ws_frames.json`, kiểm cả 3 đường).
-Xem thử: `demo/mock_radar.html`.
+Kiểm thử: `node tools/test_radar.js` — 28 mục, dùng khung thật #28 (khách), #37 (shop),
+#33 (hội thoại), #88 (gộp) trong `demo/ws_frames.json`.
+Xem thử: `demo/mock_radar.html` (nút “Shop trả lời” phải **không** hiện tin).

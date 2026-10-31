@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * test_radar.js — kiểm tra script "Radar tin nhắn tới" (báo tin kèm tên + nội dung + vị trí).
+ * test_radar.js — kiểm tra script "Radar tin nhắn TỚI" (chỉ tin KHÁCH gửi đến).
  *
- * Dùng khung websocket THẬT trong demo/ws_frames.json (rút từ batmesss.har).
- * Kiểm cả 3 đường bắt tin:
- *   1. websocket   (báo trước)
- *   2. API danh sách (dự phòng — so snippet/updated_at)
- *   3. giao diện   (MutationObserver — dòng vừa đổi)
- * và kiểm bảng chẩn đoán (nút 🔍 / __radar.debug()).
+ * Dùng khung websocket THẬT trong demo/ws_frames.json:
+ *   #28 "message-khach": insertMessage, sender = psid khách  -> PHẢI báo
+ *   #37 "message-shop" : insertMessage, sender = page id     -> KHÔNG báo
+ *   #33 "thread"       : deleteThenInsertThread (không có sender) -> chưa rõ chiều -> mặc định không báo
+ *   #88 "gop"          : khung gộp nhiều hội thoại            -> bỏ
+ * và API danh sách: last_sent_by là OBJECT {id,…} -> so id với psid / page_id.
  *
  *   NODE_PATH=/tmp/jsdomtest/node_modules node tools/test_radar.js
  */
@@ -26,8 +26,11 @@ try {
 const ROOT = path.resolve(__dirname, '..');
 const SCRIPT = fs.readFileSync(path.join(ROOT, 'userscripts', 'pancake-new-message-radar.user.js'), 'utf8');
 const FRAMES = JSON.parse(fs.readFileSync(path.join(ROOT, 'demo', 'ws_frames.json'), 'utf8')).frames;
-const fWithAd = FRAMES.find(f => f.co_ad_id > 0);
-const fMulti = FRAMES.filter(f => f.psid.length > 2)[0];
+const F = kind => FRAMES.find(f => f.kind === kind);
+const fKhach = F('message-khach');
+const fShop = F('message-shop');
+const fThread = F('thread');
+const fGop = F('gop');
 
 const PAGE = '834072796450267';
 const PSID = '61594409994701';
@@ -54,19 +57,34 @@ window.WebSocket = class FakeWS {
   send() {} close() {}
 };
 window.__listCalls = 0;
+window.PAGE = ${JSON.stringify(PAGE)};
+window.PSID = ${JSON.stringify(PSID)};
+// last_sent_by là OBJECT giống dữ liệu thật
 window.__convs = [
   { id: ${JSON.stringify(OTHER)}, page_id: ${JSON.stringify(PAGE)}, from_psid: '100061610676863',
     customers: [{ id: 'u1', fb_id: '100061610676863', name: 'Khách Khác' }],
-    snippet: 'Ok shop', updated_at: '2026-10-31T02:00:00Z', last_sent_by: 'customer' },
+    snippet: 'Ok shop', updated_at: '2026-10-31T02:00:00Z',
+    last_sent_by: { id: '100061610676863', name: 'Khách Khác' } },
   { id: ${JSON.stringify(CONV)}, page_id: ${JSON.stringify(PAGE)}, from_psid: ${JSON.stringify(PSID)},
     customers: [{ id: 'u2', fb_id: ${JSON.stringify(PSID)}, name: 'Ngọc Ánh' }],
-    snippet: 'Ib mình mẫu này', updated_at: '2026-10-31T02:10:00Z', last_sent_by: 'customer' }
+    snippet: 'Ib mình mẫu này', updated_at: '2026-10-31T02:10:00Z',
+    last_sent_by: { id: ${JSON.stringify(PAGE)}, name: 'Huyền Nguyễn Shop' } }
 ];
 window.fetch = function (input) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   if (/\\/conversations(\\?|$)/.test(url) && !/\\/messages/.test(url)) window.__listCalls++;
   const body = { success: true, conversations: window.__convs };
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body), clone() { return this; } });
+};
+/** khung insertMessage tổng hợp (cùng dạng với khung thật, không phải lắt léo escape)
+ *  dạng: [5,\"insertMessage\",\"<nội dung>\",[9],[19,\"80\"],[19,\"<psid>\"],…,\"mid.…\",\"<id>\",[19,\"<sender>\"]
+ */
+window.__msgFrame = function (psid, text, fromCustomer) {
+  const q = String.fromCharCode(92) + '"';      // \"  (một dấu \ rồi dấu ")
+  const sender = fromCustomer ? psid : window.PAGE;
+  return '[5,' + q + 'insertMessage' + q + ',' + q + text + q + ',[9],[19,' + q + '80' + q + '],[19,' + q + psid + q +
+    '],[19,' + q + '0' + q + '],[19,' + q + '1' + q + '],[19,' + q + '1' + q + '],[9],' +
+    q + 'mid.$demo' + q + ',' + q + '75178901770' + q + ',[19,' + q + sender + q + ']';
 };
 </script>
 <script>
@@ -75,9 +93,7 @@ ${SCRIPT}
 <script>
 window.__ws = new WebSocket('wss://edge-chat.facebook.com/chat?region=pnb');
 window.__ws.addEventListener('message', function () { window.__pageMsg++; });
-window.__b64 = ${JSON.stringify(fWithAd.b64)};
-window.__b64multi = ${JSON.stringify(fMulti.b64)};
-window.__frame = (psid, text) => 'deleteThenInsertThread",[19,"3"],[19,"-1"],"' + text + '",[9],"entity_id=' + psid + '&"';
+window.__b64 = ${JSON.stringify({ khach: fKhach.b64, shop: fShop.b64, thread: fThread.b64, gop: fGop.b64 })};
 </script>
 </body></html>`;
 
@@ -106,88 +122,96 @@ const toBuf = b64 => {
   return arr.buffer;
 };
 const items = () => window.__radar.items;
+const diag = () => window.__radar.debug().diag;
 
 (async () => {
   let fail = 0;
   const check = (ok, msg) => { console.log((ok ? '✓ ' : '✗ ') + msg); if (!ok) fail++; };
 
   await sleep(400);
-  check(!!window.__radar, 'script nạp được, có __radar');
-  check(!!doc.querySelector('.__rd_panel'), 'có bảng radar');
-  check(!!doc.querySelector('.__rd_fab'), 'có nút 📨');
-  check(window.__radar.debug().diag.hook === true, 'hook WebSocket đã treo (chẩn đoán ghi nhận)');
+  check(!!window.__radar, 'script nạp được');
+  check(diag().hook === true, 'hook WebSocket đã treo');
 
-  // ---- nạp danh sách để biết TÊN
+  // nạp danh sách để biết tên
   window.fetch('/api/v1/pages/' + PAGE + '/conversations?unread_first=true&mode=OR', { method: 'POST' });
   await sleep(300);
-  check(window.__listCalls === 1, 'đã đọc phản hồi danh sách');
-  check((window.__radar.people.get(PSID) || {}).name === 'Ngọc Ánh', 'ghép được psid -> tên "Ngọc Ánh"');
-  check(window.__radar.debug().diag.sockets.some(u => /edge-chat\.facebook\.com/.test(u)), 'chẩn đoán có ghi URL socket');
+  check((window.__radar.people.get(PSID) || {}).name === 'Ngọc Ánh', 'ghép psid -> tên "Ngọc Ánh"');
 
-  // ---- 1. websocket: khung THẬT (tin của khách)
-  window.__ws.dispatch('message', toBuf(fWithAd.b64));
+  // ---- 1. KHUNG THẬT của KHÁCH (#28): sender = psid -> phải báo
+  window.__ws.dispatch('message', toBuf(fKhach.b64));
   await sleep(250);
   const it = items()[0];
-  check(items().length === 1, 'báo tin từ khung websocket thật');
-  check(!!it && it.name === 'Ngọc Ánh', 'đúng TÊN (' + (it && it.name) + ')');
-  check(!!it && it.snippet === 'đắt cái áo mà 10 ngày chưa có', 'đúng NỘI DUNG (' + (it && it.snippet) + ')');
-  check(!!it && it.posNow === 2, 'đúng VỊ TRÍ (dòng 2)');
-  check(!!it && it.via === 'websocket', 'nguồn = websocket');
-  check(!!it && it.ads[0] === '120251435064020732', 'kèm ad_id (' + (it && it.ads[0]) + ')');
+  check(items().length === 1, 'báo tin KHÁCH từ khung thật #28');
+  check(!!it && it.snippet === 'đắt cái áo mà 10 ngày chưa có', 'đúng nội dung (' + (it && it.snippet) + ')');
+  check(!!it && it.name === 'Ngọc Ánh', 'đúng tên (' + (it && it.name) + ')');
+  check(!!it && it.sender === PSID, 'nhận đúng sender = psid khách (' + (it && it.sender) + ')');
+  check(!!it && it.dirKnown === true, 'chiều tin xác định được');
+  check(!!it && it.posNow === 2, 'đúng vị trí (dòng 2)');
 
-  // ---- tin của shop: bỏ; tắt "chỉ tin tới" thì báo
-  window.__ws.dispatch('message', window.__frame(PSID, 'Bạn: Em gửi bảng size ạ'));
-  await sleep(150);
-  check(items().length === 1, 'tin của shop bị bỏ khi bật "chỉ tin tới"');
-  window.__radar.set({ onlyIncoming: false });
-  window.__ws.dispatch('message', window.__frame(PSID, 'Bạn: Đây là tin shop thứ hai'));
-  await sleep(150);
-  check(items().length === 2, 'tắt "chỉ tin tới" thì báo cả tin shop');
-  window.__radar.set({ onlyIncoming: true });
+  // ---- 2. KHUNG THẬT của SHOP (#37): sender = page id -> KHÔNG báo
+  const out0 = diag().skippedOut;
+  window.__ws.dispatch('message', toBuf(fShop.b64));
+  await sleep(200);
+  check(items().length === 1, 'KHÔNG báo tin shop (#37 có sender = page id)');
+  check(diag().skippedOut === out0 + 1, 'đếm đúng 1 tin shop bị bỏ (' + diag().skippedOut + ')');
 
-  // ---- khung gộp nhiều hội thoại: bỏ
-  window.__ws.dispatch('message', toBuf(fMulti.b64));
-  await sleep(150);
-  check(items().length === 2, 'khung gộp nhiều hội thoại thì bỏ (không đoán)');
+  // ---- 3. Khung cấp hội thoại (#33): không có sender -> chưa rõ chiều -> mặc định không báo
+  const unk0 = diag().skippedUnknown;
+  window.__ws.dispatch('message', toBuf(fThread.b64));
+  await sleep(200);
+  check(items().length === 1, 'khung cấp hội thoại không rõ chiều: chưa báo');
+  check(diag().skippedUnknown === unk0 + 1, 'đếm đúng 1 tin chưa rõ chiều bị bỏ');
 
-  // ---- 2. dự phòng: API danh sách đổi nội dung
+  // ---- 4. khung gộp nhiều hội thoại -> bỏ
+  window.__ws.dispatch('message', toBuf(fGop.b64));
+  await sleep(150);
+  check(items().length === 1, 'khung gộp nhiều hội thoại thì bỏ');
+
+  // ---- 5. API danh sách: last_sent_by = page -> không báo
+  window.__convs[1].snippet = 'Dạ shop gửi bảng size ạ';
+  window.__convs[1].updated_at = '2026-10-31T03:00:00Z';
+  window.fetch('/api/v1/pages/' + PAGE + '/conversations?unread_first=true&mode=OR', { method: 'POST' });
+  await sleep(300);
+  check(items().length === 1, 'API danh sách: tin shop (last_sent_by.id = page) không báo');
+
+  // ---- 6. API danh sách: last_sent_by.id = psid khách -> báo
   window.__convs[0].snippet = 'Shop ơi giao hôm nay không';
   window.__convs[0].updated_at = '2026-10-31T03:30:00Z';
   window.fetch('/api/v1/pages/' + PAGE + '/conversations?unread_first=true&mode=OR', { method: 'POST' });
   await sleep(300);
   const viaList = items().find(i => i.via === 'danh sách');
-  check(!!viaList, 'dự phòng: báo tin khi API danh sách đổi (' + (viaList && viaList.snippet) + ')');
-  check(!!viaList && viaList.name === 'Khách Khác', 'dự phòng: đúng tên (' + (viaList && viaList.name) + ')');
+  check(!!viaList, 'API danh sách: tin khách (last_sent_by.id = psid) thì báo');
+  check(!!viaList && viaList.name === 'Khách Khác', 'đúng tên (' + (viaList && viaList.name) + ')');
+  check(!!viaList && viaList.dirKnown === true, 'chiều tin xác định từ last_sent_by');
 
-  // ---- 3. dự phòng: giao diện đổi (MutationObserver)
-  const row = doc.getElementById(CONV + '__0');
-  row.querySelector('.snippet-text').textContent = 'Còn size L không shop';
-  await sleep(900);
-  const viaDom = items().find(i => i.via === 'giao diện');
-  check(!!viaDom, 'dự phòng: báo tin khi dòng trên giao diện đổi');
-  check(!!viaDom && /size L/.test(viaDom.snippet), 'dự phòng: đúng nội dung dòng (' + (viaDom && viaDom.snippet) + ')');
-  check(!!viaDom && viaDom.name === 'Ngọc Ánh', 'dự phòng: đúng tên từ giao diện (' + (viaDom && viaDom.name) + ')');
+  // ---- 7. giao diện: mặc định TẮT nên không báo
+  const before = items().length;
+  doc.getElementById(CONV + '__0').querySelector('.snippet-text').textContent = 'Còn size L không shop';
+  await sleep(800);
+  check(items().length === before, 'theo dõi giao diện mặc định TẮT (không biết chiều)');
 
-  // ---- nút 🧪 tin thử
-  const testBtn = Array.from(doc.querySelectorAll('[data-a="test"]'))[0];
-  testBtn.click();
-  await sleep(150);
-  check(items().some(i => i.via === 'thử'), 'nút 🧪 bắn được tin thử (kiểm tra giao diện)');
+  // ---- 8. khung tin nhắn tổng hợp: khách -> báo, shop -> không
+  window.__ws.dispatch('message', window.__msgFrame(PSID, 'Cho mình xin địa chỉ shop', true));
+  await sleep(200);
+  check(items().length === before + 1, 'khung tổng hợp: tin khách được báo');
+  window.__ws.dispatch('message', window.__msgFrame(PSID, 'Dạ shop ở Hà Nội ạ', false));
+  await sleep(200);
+  check(items().length === before + 1, 'khung tổng hợp: tin shop không báo');
 
-  // ---- nút 🔍 mở bảng chẩn đoán
-  const diagBtn = Array.from(doc.querySelectorAll('[data-a="diag"]'))[0];
-  diagBtn.click();
+  // ---- 9. nút 🧪 + 🔍
+  Array.from(doc.querySelectorAll('[data-a="test"]'))[0].click();
+  await sleep(120);
+  check(items().some(i => i.via === 'thử'), 'nút 🧪 bắn được tin thử');
+  Array.from(doc.querySelectorAll('[data-a="diag"]'))[0].click();
   await sleep(100);
-  const diagBox = doc.querySelector('.__rd_diag');
-  check(diagBox && diagBox.classList.contains('open'), 'nút 🔍 mở bảng chẩn đoán');
-  check(diagBox && /hook websocket: đã treo/.test(diagBox.textContent), 'chẩn đoán ghi "hook websocket: đã treo"');
-  check(diagBox && /edge-chat\.facebook\.com/.test(diagBox.textContent), 'chẩn đoán liệt kê URL socket');
+  const box = doc.querySelector('.__rd_diag');
+  check(box && box.classList.contains('open'), 'nút 🔍 mở bảng chẩn đoán');
+  check(box && /bỏ vì là tin shop/.test(box.textContent), 'chẩn đoán ghi số tin shop đã bỏ');
+  check(box && /cấp tin nhắn/.test(box.textContent), 'chẩn đoán phân loại khung cấp tin nhắn');
 
-  // ---- trạng thái tổng hợp
-  const rep = window.__radar.debug();
-  check(rep.diag.parsed >= 1, 'chẩn đoán đếm được khung đọc thành công (' + rep.diag.parsed + ')');
-  check(rep.diag.frames >= 4, 'chẩn đoán đếm được số khung nhận (' + rep.diag.frames + ')');
-  check(window.__pageMsg >= 4, 'listener của trang vẫn nhận đủ khung (' + window.__pageMsg + ')');
+  // ---- 10. tổng hợp
+  check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');
+  check(window.__pageMsg >= 6, 'listener của trang vẫn nhận đủ khung (' + window.__pageMsg + ')');
   check(errors.length === 0, 'không có lỗi JS' + (errors.length ? ': ' + errors[0] : ''));
 
   console.log(fail ? '\n❌ ' + fail + ' mục hỏng' : '\n✅ tất cả đạt');
