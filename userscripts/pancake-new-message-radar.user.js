@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.5.0
+// @version      1.6.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
 
   const DEFAULTS = {
     on: true,
@@ -67,12 +67,17 @@
     listHits: 0,
     domHits: 0,
     listReq: null,
+    pageCounts: null,      // pages_with_current_count lần trước
+    pagePollAt: {},
+    pagePollFail: 0,
+    internal: false,      // đang tự gọi (không ghi đè request danh sách)
     panel: null,
     fab: null,
     diagOpen: false,
     log: [],
     diag: {
       hook: false, hookErr: '', sockets: [], frames: 0, listReq: 0, polls: 0, lastPollAt: 0, bodyReady: false,
+      pageTriggers: 0, pagePolls: 0, pageFail: 0,
       msgFrames: 0, threadFrames: 0, parsed: 0,
       skippedOut: 0, skippedUnknown: 0, lastFrameAt: 0, lastErr: '', lastSender: ''
     }
@@ -132,7 +137,9 @@
     const mp = /\[9\],\[19,\\"80\\"\],\[19,\\"(\d+)\\"\]/.exec(seg);       // psid của hội thoại
     if (!mp) return null;
     const ms = /\\"mid\.[^"\\]*\\",\\"\d+\\",\[19,\\"(\d+)\\"\]/.exec(seg);  // SENDER ID
+    const mi = /\\"mid\.([^"\\]*)\\"/.exec(seg);                            // mã tin (mid.$…)
     const sender = ms ? ms[1] : '';
+    const msgId = mi ? mi[1] : '';
     const snippet = unesc(mt[1]).replace(/\s+/g, ' ').trim();
     if (!snippet) return null;
 
@@ -140,7 +147,7 @@
     if (sender) outgoing = pageId ? (sender === pageId) : (sender !== mp[1] ? null : false);
     return {
       psid: mp[1], snippet, avatar: '', ads: [], at: Date.now(),
-      sender, outgoing: outgoing === true, dirKnown: outgoing !== null, kind: 'message'
+      sender, msgId, outgoing: outgoing === true, dirKnown: outgoing !== null, kind: 'message'
     };
   }
 
@@ -282,7 +289,7 @@
     return false;
   }
 
-  function ingestList(json) {
+  function ingestList(json, fromPage) {
     if (!json || typeof json !== 'object') return;
     const arr = json.conversations || json.data || [];
     if (!Array.isArray(arr) || !arr.length) return;
@@ -309,17 +316,78 @@
       state.convs.set(id, { psid, name, snippet, updated_at: updated, lastSentById: sbId });
       if (psid && name) state.people.set(psid, { name, convId: id, avatar: avatar || (state.people.get(psid) || {}).avatar || '' });
 
-      if (state.seeded && prev && (prev.updated_at !== updated || prev.snippet !== snippet) && snippet) {
+      // hội thoại MỚI (chưa từng thấy) cũng là tin mới — nhưng chỉ báo khi cập nhật gần đây,
+      // tránh báo cả loạt hội thoại cũ khi lần đầu gọi riêng một trang
+      const ts = updated ? (Date.parse(updated) || 0) : 0;
+      const recent = !updated || (ts && Date.now() - ts < 15 * 60 * 1000);
+      const isNewConv = !prev && !!snippet && recent;
+      if (state.seeded && snippet && ((prev && (prev.updated_at !== updated || prev.snippet !== snippet)) || isNewConv)) {
         let outgoing = null;
         if (sbId && psid) outgoing = (sbId === psid) ? false : (pageId && sbId === pageId ? true : null);
         const lag = state.lastChangeAt && (Date.now() - state.lastChangeAt < 15000) ? (Date.now() - state.lastChangeAt) : 0;
-        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag });
+        fresh.push({ psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag, updatedAt: updated });
       }
     });
 
-    if (!state.seeded) { state.seeded = true; render(); return; }
+    if (!state.seeded) { state.seeded = true; watchPageCounts(json); render(); return; }
     if (CFG.watchList) fresh.forEach(f => route(f, 'danh sách'));
+    if (!fromPage) watchPageCounts(json);
     render();
+  }
+
+  /**
+   * Danh sách nhiều trang chỉ trả về MỘT phần hội thoại (đo trong tinnhanmoi.har: 1 hội thoại),
+   * nên tin của hội thoại nằm ngoài phần đó sẽ không thấy.
+   * Bù lại: response có pages_with_current_count — số chưa đọc của TỪNG trang.
+   * Trang nào tăng số chưa đọc -> gọi riêng danh sách trang đó (1 request) để lấy đúng hội thoại.
+   */
+  function watchPageCounts(json) {
+    const pc = json && json.pages_with_current_count;
+    if (!pc || typeof pc !== 'object') return;
+    const prev = state.pageCounts;
+    state.pageCounts = Object.assign({}, pc);
+    if (!prev) return;
+    Object.keys(pc).forEach(pageId => {
+      const now = Number(pc[pageId]) || 0;
+      const was = Number(prev[pageId]) || 0;
+      if (now > was) {
+        state.diag.pageTriggers++;
+        logEvent('🔔', 'trang ' + pageId + ' có ' + now + ' tin chưa đọc (trước ' + was + ')');
+        targetPagePoll(pageId);
+      }
+    });
+  }
+
+  /** gọi danh sách riêng của một trang (endpoint GET có thật trong loaddanhsach.har) */
+  function targetPagePoll(pageId) {
+    if (state.pagePollFail >= 2) return;
+    const now = Date.now();
+    if (now - (state.pagePollAt[pageId] || 0) < 3000) return;
+    state.pagePollAt[pageId] = now;
+    const url = '/api/v1/pages/' + encodeURIComponent(pageId) + '/conversations?current_count=20&unread_first=true&mode=OR';
+    state.diag.pagePolls++;
+    state.internal = true;
+    let pr;
+    // dùng fetch GỐC (không qua hook của chính mình) để response không bị xử lý hai lần
+    const f = (typeof _fetch === 'function') ? _fetch : fetch;
+    try {
+      pr = f(url, { method: 'GET', credentials: 'include' });
+    } catch (e) {
+      state.internal = false;
+      state.pagePollFail++; state.diag.pageFail++;
+      logEvent('⚠️', 'gọi trang ' + pageId + ' lỗi: ' + e.message);
+      return;
+    }
+    state.internal = false;
+    Promise.resolve(pr).then(r => {
+      if (!r || !r.ok) {
+        state.pagePollFail++; state.diag.pageFail++;
+        logEvent('⚠️', 'gọi trang ' + pageId + ' HTTP ' + (r && r.status));
+        return null;
+      }
+      return r.json();
+    }).then(j => { if (j) ingestList(j, true); })
+      .catch(err => { state.pagePollFail++; state.diag.pageFail++; logEvent('⚠️', 'gọi trang lỗi: ' + err.message); });
   }
 
   function captureListReq(url, method, init, input) {
@@ -356,7 +424,7 @@
     window.fetch = function (input, init) {
       const url = typeof input === 'string' ? input : ((input && input.url) || '');
       let method = (init && init.method) || (input && input.method) || 'GET';
-      try { if (isListUrl(url)) captureListReq(url, method, init, input); } catch (e) { /* ignore */ }
+      try { if (!state.internal && isListUrl(url)) captureListReq(url, method, init, input); } catch (e) { /* ignore */ }
       const p = _fetch.apply(this, arguments);
       try {
         if (isListUrl(url)) {
@@ -514,7 +582,16 @@
   function publish(hit, via) {
     if (!hit || !hit.psid) return;
     const key = normText(hit.snippet);
-    const dup = state.items.some(it => it.psid === hit.psid && normText(it.snippet) === key && Date.now() - it.at < 20000);
+    // Gộp trùng theo đúng bản chất từng nguồn:
+    //  • cả hai đến từ websocket  -> so mã tin (mid): khách nhắn lại đúng câu cũ vẫn là tin mới
+    //  • cả hai đến từ danh sách  -> so updated_at: cùng mốc thời gian mới là cùng một tin
+    //  • khác nguồn (ws + danh sách của cùng một tin) -> gộp theo nội dung trong 8 giây
+    const dup = state.items.some(it => {
+      if (it.psid !== hit.psid) return false;
+      if (hit.msgId && it.msgId) return hit.msgId === it.msgId;
+      if (hit.updatedAt && it.updatedAt) return hit.updatedAt === it.updatedAt;
+      return normText(it.snippet) === key && Date.now() - it.at < 8000;
+    });
     if (dup) return;
     const convId = (pageIdNow() ? pageIdNow() + '_' : '') + hit.psid;
     const know = state.people.get(hit.psid) || {};
@@ -530,7 +607,9 @@
       posNow: pos.pos,
       dirKnown: !!hit.dirKnown,
       sender: hit.sender || '',
-      lag: hit.lag || 0
+      lag: hit.lag || 0,
+      updatedAt: hit.updatedAt || '',
+      msgId: hit.msgId || ''
     };
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
@@ -716,6 +795,7 @@
       'bỏ vì là tin shop: ' + d.skippedOut + ' · bỏ vì chưa rõ chiều: ' + d.skippedUnknown,
       'lần cuối có tin: ' + (d.lastFrameAt ? new Date(d.lastFrameAt).toLocaleTimeString() : '—') + ' · sender cuối: ' + (d.lastSender || '—'),
       'API danh sách: ' + state.listHits + ' lần · tên đã biết: ' + state.people.size,
+      'trang có tin mới: ' + d.pageTriggers + ' · gọi riêng trang: ' + d.pagePolls + ' (lỗi ' + d.pageFail + ')',
       'dòng trong danh sách: ' + rows().length,
       'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
       'lỗi gần nhất: ' + (d.lastErr || '—'),
@@ -746,6 +826,7 @@
     cfg: CFG,
     get items() { return state.items.slice(); },
     get people() { return state.people; },
+    get state() { return state; },
     debug: () => ({
       version: VERSION, url: location.href, on: CFG.on,
       wsHits: state.wsHits, listHits: state.listHits, domHits: state.domHits,

@@ -71,6 +71,8 @@ window.__convs = [
     last_sent_by: { id: ${JSON.stringify(PAGE)}, name: 'Huyền Nguyễn Shop' } }
 ];
 window.__listUrls = [];
+window.__pageOverride = null;
+window.__pageCounts = {};
 window.fetch = function (input, init) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   const path = url.split('?')[0];
@@ -79,18 +81,23 @@ window.fetch = function (input, init) {
     window.__listCalls++;
     window.__listUrls.push(((init && init.method) || 'GET') + ' ' + url);
   }
-  const body = { success: true, conversations: window.__convs, pages_with_current_count: {} };
+  const isPageList = path.indexOf('/api/v1/pages/') >= 0;
+  const body = isPageList
+    ? { success: true, conversations: (window.__pageOverride || window.__convs), pages_with_current_count: {} }
+    : { success: true, conversations: window.__convs, pages_with_current_count: window.__pageCounts };
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body), clone() { return this; } });
 };
 /** khung insertMessage tổng hợp (cùng dạng với khung thật, không phải lắt léo escape)
  *  dạng: [5,\"insertMessage\",\"<nội dung>\",[9],[19,\"80\"],[19,\"<psid>\"],…,\"mid.…\",\"<id>\",[19,\"<sender>\"]
  */
-window.__msgFrame = function (psid, text, fromCustomer) {
+window.__msgSeq = 0;
+window.__msgFrame = function (psid, text, fromCustomer, mid) {
+  window.__msgSeq++;
   const q = String.fromCharCode(92) + '"';      // \"  (một dấu \ rồi dấu ")
   const sender = fromCustomer ? psid : window.PAGE;
   return '[5,' + q + 'insertMessage' + q + ',' + q + text + q + ',[9],[19,' + q + '80' + q + '],[19,' + q + psid + q +
     '],[19,' + q + '0' + q + '],[19,' + q + '1' + q + '],[19,' + q + '1' + q + '],[9],' +
-    q + 'mid.$demo' + q + ',' + q + '75178901770' + q + ',[19,' + q + sender + q + ']';
+    q + (mid || ('mid.$demo' + window.__msgSeq)) + q + ',' + q + '75178901770' + q + ',[19,' + q + sender + q + ']';
 };
 </script>
 <script>
@@ -242,6 +249,36 @@ const diag = () => window.__radar.debug().diag;
   window.__radar.poll();
   await sleep(400);
   check(items().length === beforePoll + 1, 'tự gọi lại danh sách và báo tin khách mới');
+
+  // ---- 12. trang báo có tin chưa đọc -> gọi riêng trang đó (vì danh sách nhiều trang chỉ trả 1 phần)
+  window.__pageCounts = {}; window.__pageCounts[PAGE] = 0;
+  window.fetch('/api/v1/conversations?pages[' + PAGE + ']=0&unread_first=true&mode=OR', { method: 'POST' });
+  await sleep(250);
+  const base3 = items().length;
+  window.__pageOverride = [{
+    id: PAGE + '_999888777', page_id: PAGE, from_psid: '999888777', type: 'INBOX',
+    customers: [{ id: 'u9', fb_id: '999888777', name: 'Khách Mới' }],
+    snippet: 'Shop ơi còn hàng không', updated_at: new Date().toISOString(),
+    last_sent_by: { id: '999888777', name: 'Khách Mới' }
+  }];
+  const counts = {}; counts[PAGE] = 1; window.__pageCounts = counts;
+  window.fetch('/api/v1/conversations?pages[' + PAGE + ']=0&unread_first=true&mode=OR', { method: 'POST' });
+  await sleep(700);
+  check(items().length === base3 + 1, 'trang báo có tin chưa đọc -> báo được tin của hội thoại ngoài trang đầu');
+  check(items()[0].name === 'Khách Mới', 'đúng khách của trang đó (' + items()[0].name + ')');
+  check(window.__listUrls.some(u => u.indexOf('/api/v1/pages/' + PAGE + '/conversations') >= 0),
+    'có gọi endpoint danh sách riêng của trang');
+  check(window.__radar.debug().diag.pageTriggers >= 1, 'chẩn đoán đếm được lần trang có tin mới');
+
+  // ---- 13. hai tin trùng nội dung nhưng khác mã tin -> phải báo cả hai
+  const base4 = items().length;
+  window.__ws.dispatch('message', window.__msgFrame(PSID, 'Shop ơi', true));
+  await sleep(150);
+  window.__ws.dispatch('message', window.__msgFrame(PSID, 'Shop ơi', true));
+  await sleep(200);
+  check(items().length === base4 + 2, 'hai tin trùng nội dung vẫn báo đủ 2 lần');
+  const ids = new Set(items().slice(0, 2).map(i => i.msgId));
+  check(ids.size === 2, 'phân biệt bằng mã tin (mid), không gộp nhầm');
 
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');

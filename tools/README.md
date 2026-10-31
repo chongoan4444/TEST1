@@ -358,7 +358,40 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.5.0** (ưu tiên tốc độ).
+Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.6.0** (không sót tin + không chậm).
+
+### Vì sao 1.5.0 vẫn sót tin — bằng chứng trong HAR
+
+Giả định sai ở 1.5.0: *“API danh sách trả về toàn bộ hộp thư”*. Dữ liệu thật nói khác.
+
+`tinnhanmoi.har` → entry `POST /api/v1/conversations` (12 tham số `pages[…]`, `unread_first=true`,
+`mode=OR`, `tags=["NO_TAG"]`, `except_tags=[]`, `cursor_mode=true`, body `type=ALL,UNREAD`):
+
+| Đọc được từ response | Giá trị |
+|---|---|
+| `conversations` | **1** hội thoại (`881264518397934_28856202704022307`, `unread:0`) |
+| `pages_with_current_count` | 11 trang = **0**, trang `881264518397934` = **1** |
+| `next_cursor` | có → còn trang nữa, script **không** đi hết |
+
+⇒ Danh sách trả về chỉ là **một lát cắt** (lọc tag + `cursor_mode`). Tin của hội thoại nằm ngoài
+lát cắt đó **không bao giờ** xuất hiện dù có quét nhanh đến đâu — đây là lý do “tin được tin không”,
+không phải do bộ đếm 8 giây.
+
+### 1.6.0 sửa gì
+
+1. **Theo dõi `pages_with_current_count`** — mỗi lần đọc response, so số chưa đọc của từng trang;
+   trang nào **tăng** thì gọi riêng trang đó:
+   `GET /api/v1/pages/<page_id>/conversations?current_count=20&unread_first=true&mode=OR`
+   (giới hạn 3 giây/trang, tự tắt sau 2 lần lỗi). Nhật ký ghi `🔔 trang <id> có N tin chưa đọc (trước M)`.
+2. **Hội thoại chưa từng thấy = tin mới** — nếu `updated_at` trong 15 phút; tránh báo cả loạt hội thoại cũ
+   khi lần đầu gọi riêng một trang.
+3. **Bỏ gộp trùng quá tay** — trước đây cùng psid + cùng nội dung trong 20 giây bị coi là một tin,
+   nên khách nhắn lại đúng câu cũ thì im lặng. Nay:
+   - hai tin đều từ websocket → so **mã tin (`mid.$…`)** — câu giống nhau vẫn là 2 tin;
+   - hai tin đều từ danh sách → so **`updated_at`** — cùng mốc mới là cùng một tin;
+   - khác nguồn (ws + danh sách của cùng một tin) → gộp theo nội dung trong 8 giây.
+4. **Không tự ăn nhầm request của chính mình** — cờ `state.internal` để các lần tự gọi không ghi đè
+   request danh sách đã học từ ứng dụng.
 
 ### Ba đường bắt tin — đường nào tới trước thì dùng
 
@@ -366,6 +399,7 @@ Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. 
 |---|---|---|
 | websocket `insertMessage` | **trước khi dòng hiện** | chỉ có khi socket Facebook đẩy tin; không phải lúc nào cũng có |
 | dòng trên màn hình vừa đổi → gọi lại danh sách NGAY | **~0,15 – 0,5 giây** | bật mặc định (`domTrigger:true`) |
+| **trang báo có tin chưa đọc** → gọi riêng trang đó | **≤ 2 giây** | bắt được cả hội thoại ngoài lát cắt của danh sách |
 | tự gọi lại danh sách | **≤ 2 giây** | `pollMs: 2000`, chỉ khi tab đang xem |
 
 Bản 1.4.0 quét 8 giây nên “tin hiện ra rồi mới báo”. Nay: dòng vừa đổi là gọi lại API ngay
@@ -389,10 +423,14 @@ ví dụ `báo sau dòng 0,2s`, còn tin qua websocket ghi `báo TRƯỚC khi d�
 Script ghi nhớ **url + method + body** của request gặp được rồi tự gọi lại; bỏ `content-type`
 khi gửi lại FormData để trình duyệt tự sinh boundary.
 
+Vì danh sách nhiều trang chỉ trả một lát cắt, script còn gọi **danh sách riêng của từng trang**
+(`/api/v1/pages/<id>/conversations`) khi trang đó báo có tin chưa đọc — xem mục 1.6.0 ở trên.
+
 ### Bảng + chẩn đoán
 
 ```
 WS 1 socket · 12 tin · DS 6 lần (10:22:30) · bỏ 7 tin shop · Tên 300
+trang có tin mới: 2 · gọi riêng trang: 2 (lỗi 0)
 
 10:22:41 📥 Ngọc Ánh · Còn size M không shop
 10:22:38 ⏭ bỏ tin shop · Dạ em gửi bảng size ngay ạ
@@ -404,7 +442,10 @@ __radar.debug()              // trạng thái + chẩn đoán + nhật ký
 __radar.poll()               // gọi lại danh sách ngay
 __radar.set({pollMs:1500})   // nhanh hơn (mặc định 2000)
 __radar.set({domTrigger:false})  // tắt kích hoạt theo giao diện
+__radar.state                // dữ liệu thô: convs / people / items / pageCounts
 ```
 
-Kiểm thử: `node tools/test_radar.js` — 34 mục, gồm khung thật #28/#37/#33/#88, endpoint thật
-`POST /api/v1/conversations`, kích hoạt theo giao diện (đo được ~0,15 giây) và tự gọi lại.
+Kiểm thử: `node tools/test_radar.js` — **40 mục**, gồm khung thật #28/#37/#33/#88, endpoint thật
+`POST /api/v1/conversations`, kích hoạt theo giao diện (đo được ~0,15 giây), tự gọi lại,
+**trang báo có tin chưa đọc → gọi riêng trang và báo đúng khách ngoài trang đầu**, và
+**hai tin trùng nội dung vẫn báo đủ 2 lần** (phân biệt bằng `mid`).
