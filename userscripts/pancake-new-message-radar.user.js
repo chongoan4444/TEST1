@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      2.6.0
+// @version      2.7.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.6.0';
+  const VERSION = '2.7.0';
 
   const DEFAULTS = {
     on: true,
@@ -225,6 +225,7 @@
 
   function onFrameText(text) {
     if (!CFG.on) return;
+    state.frameTextAt = Date.now();
     const raw = String(text == null ? '' : text);
     try {
       const rf = state.diag.rawFrames;
@@ -252,6 +253,7 @@
       state.diag.parsed++;
       state.diag.lastFrameAt = Date.now();
       state.diag.lastSender = hit.sender || (hit.dirKnown ? 'tiền tố' : '?');
+      hit.socketAt = state.frameTextAt;
       route(hit, 'websocket');
       return;
     }
@@ -330,7 +332,7 @@
     if (hasSnippet) d.patchWithSnippet = (d.patchWithSnippet || 0) + 1;
 
       state.patchTimes = state.patchTimes || new Map();
-      state.patchTimes.set(id, Date.now());
+      state.patchTimes.set(id, state.frameTextAt || Date.now());
       if (state.patchTimes.size > 300) state.patchTimes.delete(state.patchTimes.keys().next().value);
 
     if (id && hasSnippet) {
@@ -544,7 +546,7 @@
         let outgoing = null;
         if (sbId && psid) outgoing = (sbId === psid) ? false : (pageId && sbId === pageId ? true : null);
         const lag = state.lastChangeAt && (Date.now() - state.lastChangeAt < 15000) ? (Date.now() - state.lastChangeAt) : 0;
-        fresh.push({ convId: id, psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag, updatedAt: updated, untagged: untaggedConv });
+        fresh.push({ socketAt: viaName === 'websocket' ? state.frameTextAt : 0, convId: id, psid, snippet, outgoing: outgoing === true, dirKnown: outgoing !== null, ads: [], avatar: '', at: Date.now(), sender: sbId, kind: 'list', lag, updatedAt: updated, untagged: untaggedConv });
       }
     });
 
@@ -1040,8 +1042,8 @@
 
   function measureAlert(item) {
     item.alertAt = Date.now();
-    item.patchAt = (state.patchTimes && state.patchTimes.get(item.convId)) || 0;
-    item.patchToAlertMs = item.patchAt ? item.alertAt - item.patchAt : null;
+    item.patchAt = item.socketAt || 0;
+    item.patchToAlertMs = item.patchAt ? item.lampAt - item.patchAt : null;
     item.domAt = rowHasMessage(item) ? item.alertAt : 0;
     item.timingText = item.domAt ? 'nội dung đã có trong DOM khi báo' : 'đã báo · chờ đối chiếu DOM';
     item.timingStatus = item.domAt ? 'already-visible' : 'pending';
@@ -1049,11 +1051,11 @@
 
   function measureDom() {
     let changed = false;
-    state.items.forEach(item => {
+    (state.timingHistory || []).forEach(item => {
       if (item.timingStatus !== 'pending') return;
       if (rowHasMessage(item)) {
         item.domAt = Date.now();
-        item.leadMs = item.domAt - item.alertAt;
+        item.leadMs = item.domAt - item.lampAt;
         item.timingStatus = 'before-dom';
         item.timingText = 'báo trước khi quan sát thấy nội dung trong DOM ' + item.leadMs + ' ms';
         changed = true;
@@ -1080,12 +1082,12 @@
       return normText(it.snippet) === key && Date.now() - it.at < 8000;
     });
     if (dup) return;
-    flashLamp(); // ưu tiên tín hiệu nhẹ trước khi dò DOM/dựng bảng
+    const lampAt = flashLamp(); // mốc đổi lớp đèn, không phải thời điểm paint
     const convId = hit.convId || (state.people.get(hit.psid) || {}).convId || (pageIdNow() ? pageIdNow() + '_' : '') + hit.psid;
     const know = state.people.get(hit.psid) || {};
     const pos = positionOf(hit.psid, convId);
     const item = {
-      psid: hit.psid, convId,
+      psid: hit.psid, convId, lampAt, socketAt:hit.socketAt || 0,
       name: know.name || (state.convs.get(convId) || {}).name || '',
       snippet: hit.snippet,
       avatar: hit.avatar || know.avatar || '',
@@ -1101,6 +1103,11 @@
       untagged: !!hit.untagged
     };
     measureAlert(item);
+    state.timingHistory = state.timingHistory || [];
+    state.timingHistory.unshift(item); // giữ tham chiếu để DOM đo tiếp dù bảng đã xoá tin/gắn thẻ
+    if (state.timingHistory.length > 80) state.timingHistory.length = 80;
+    state.diag.lastFrameAt = item.alertAt;
+    state.diag.lastSender = item.sender || 'chưa rõ';
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
     scheduleRender();
@@ -1184,12 +1191,14 @@
   }
 
   function flashLamp() {
-    state.lampUntil = Date.now() + 2500;
+    const lampAt = Date.now();
+    state.lampUntil = lampAt + 2500;
     if (state.fab) state.fab.classList.add('signal');
     clearTimeout(state.lampTimer);
     state.lampTimer = setTimeout(() => {
       if (state.fab) state.fab.classList.remove('signal');
     }, 2500);
+    return lampAt;
   }
 
   function attachLampDrag(b) {
@@ -1392,7 +1401,7 @@
       'dòng trong danh sách: ' + rows().length,
       'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
       'chưa gắn tag: hỏi ' + (d.untaggedPolls || 0) + ' lần · lỗi ' + (d.untaggedErr || 0) + ' · ' + (d.untaggedConvs || 0) + ' hội thoại chưa gắn tag đã thấy',
-      'đo từng tin (DOM, không phải thời điểm paint): ' + JSON.stringify(state.items.slice(0, 8).map(it => ({convId: it.convId, status: it.timingStatus, socketToAlertMs: it.patchToAlertMs, leadMs: it.leadMs}))),
+      'đo từng tin (DOM, không phải thời điểm paint): ' + JSON.stringify((state.timingHistory || []).slice(0, 12).map(it => ({convId: it.convId, via: it.via, status: it.timingStatus, socketAt: it.patchAt || null, lampAt: it.lampAt, domAt: it.domAt || null, socketToLampMs: it.patchToAlertMs, leadMs: it.leadMs == null ? null : it.leadMs}))),
       'lọc chỉ chưa gắn thẻ: ' + (CFG.onlyUntagged ? 'bật' : 'tắt') + ' · bỏ có thẻ/chưa rõ thẻ: ' + (d.skippedTagged || 0),
       'đường Phoenix trực tiếp: ' + (d.phoenixFast || 0) + ' khung',
       'socket đủ dữ liệu, không gọi lại: ' + (d.socketComplete || 0) + ' · có thẻ bỏ xác minh: ' + (d.socketTaggedNoFetch || 0) + ' · khung thiếu cần xác minh: ' + (d.socketVerify || 0),
@@ -1430,6 +1439,7 @@
     cfg: CFG,
     get items() { return state.items.slice(); },
     get people() { return state.people; },
+    get timings() { return (state.timingHistory || []).map(it => ({convId:it.convId, via:it.via, status:it.timingStatus, socketAt:it.patchAt || null, lampAt:it.lampAt, domAt:it.domAt || null, socketToLampMs:it.patchToAlertMs, leadMs:it.leadMs == null ? null : it.leadMs})); },
     get state() { return state; },
     debug: () => ({
       version: VERSION, url: location.href, on: CFG.on,

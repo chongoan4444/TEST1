@@ -1,3 +1,12 @@
+## Radar 2.7.0 — giữ lịch sử đo độc lập khỏi bảng
+
+- Lịch sử tối đa 80 tin trong bộ nhớ phiên, không mất khi tin được gắn thẻ hoặc bấm 🧹. Reload khởi tạo lịch sử mới; không lưu nội dung khách vào localStorage.
+- Đối chiếu DOM tiếp tục theo lịch sử thay vì danh sách hiển thị. 🔍 hiển thị 12 số đo gần nhất; `__radar.timings` trả bản tóm tắt toàn bộ lịch sử.
+- `socketAt`: lúc bắt đầu xử lý văn bản socket (Date.now), chỉ gán khi tin thật sự đi từ handler socket; không lấy khung cũ để quy kết API là socket. `lampAt`: lúc mã đổi lớp đèn; `socketToLampMs`: chênh hai mốc. Không phải thời gian từ máy khách gửi, không phải thời điểm pixel hiển thị. Độ phân giải millisecond có thể trả 0.
+- `domAt`: lần đầu quan sát thấy snippet khớp trong DOM. `leadMs`: DOM quan sát sau mã bật đèn bao nhiêu ms. `already-visible` chỉ cho biết nội dung đã hiện trong DOM lúc kiểm tra, không đo được trễ bao nhiêu. `unobserved` không có nghĩa báo trước; có thể do bộ lọc/virtualization/snippet rút gọn. Không đảm bảo đo browser paint.
+- Sửa thông tin tin cuối/người gửi cuối khi publish tin Phoenix hợp lệ. Giữ nguyên bộ lọc chỉ khách chưa gắn thẻ và kích thước đèn 32 px.
+- Kiểm thử: sau gắn thẻ vẫn giữ mốc socket/đèn, vẫn đối chiếu DOM, xoá bảng không xoá lịch sử, cập nhật sender Phoenix; mock và 19 ca DOM/API thật đạt.
+
 ## Radar 2.6.0 — đường Phoenix trực tiếp, đèn 32 px
 
 - Nhận diện khung Phoenix JSON 5 phần tử ngay đầu đường nhận; truyền đối tượng đã parse xuống handler thay vì dò định dạng Facebook cũ rồi parse lại. Định dạng legacy vẫn giữ bộ dò cũ.

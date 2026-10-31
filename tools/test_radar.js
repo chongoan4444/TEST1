@@ -527,6 +527,19 @@ const diag = () => window.__radar.debug().diag;
   check(items().length === 1 && items()[0].untagged, 'tags rỗng -> hiển thị đúng tin');
   await sendTags('999111224', [3], 'Chưa gắn thẻ được báo');
   check(!items().some(it => it.convId === PAGE + '_999111224'), 'gắn thẻ sau đó -> loại khỏi bảng');
+  const keptTiming = window.__radar.timings.find(t => t.convId === PAGE + '_999111224');
+  check(!!keptTiming && keptTiming.socketAt <= keptTiming.lampAt && keptTiming.socketToLampMs >= 0,
+    'gắn thẻ không xoá lịch sử và có số đo socket -> đèn');
+  const taggedRow = doc.createElement('div');
+  taggedRow.id = PAGE + '_999111224__0';
+  taggedRow.className = 'conversation-list-item';
+  taggedRow.innerHTML = '<div class="snippet-text">Chưa gắn thẻ được báo</div>';
+  doc.querySelector('.conversation-list').appendChild(taggedRow);
+  window.__radar.scan();
+  check(window.__radar.timings.some(t => t.convId === PAGE + '_999111224' && t.status === 'before-dom'),
+    'vẫn đối chiếu DOM sau khi tin đã bị loại khỏi bảng');
+  check(!!diag().lastFrameAt && diag().lastSender === '999111224', 'chẩn đoán cập nhật tin Phoenix cuối');
+
 
   // ---- 23. thu thành đèn, tín hiệu và vị trí lưu trong cấu hình
   doc.querySelector('[data-a="close"]').click();
@@ -554,6 +567,9 @@ const diag = () => window.__radar.debug().diag;
   const panelBeforeDragClick = window.__radar.cfg.panel;
   lamp.click();
   check(window.__radar.cfg.panel === panelBeforeDragClick, 'kéo xong không vô tình mở/đóng bảng');
+
+  window.__radar.clear();
+  check(window.__radar.timings.length > 0, 'xoá bảng không xoá lịch sử đo');
 
   // ---- 24. đường nhanh Phoenix và chống xử lý đôi MessageEvent
   const framesBeforeFast = diag().frames;
