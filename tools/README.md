@@ -358,30 +358,40 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn tới — script RIÊNG (`userscripts/pancake-new-message-radar.user.js`)
 
-Một userscript độc lập (không phụ thuộc script gắn nhãn), báo **tin nhắn tới trước khi
-Pancake vẽ dòng chat**: tên khách · nội dung · **vị trí dòng sẽ xuất hiện**.
+Userscript độc lập, báo tin nhắn tới: **tên khách · nội dung · vị trí dòng sẽ xuất hiện**.
+Bản **1.1.0** có 3 đường bắt tin để không bao giờ “im lặng”:
+
+| # | Nguồn | Thời điểm báo | Ghi chú |
+|---|---|---|---|
+| 1 | websocket `edge-chat.facebook.com/chat` | **trước** khi dòng hiện ra | nguồn chính, đọc `deleteThenInsertThread` |
+| 2 | tự gọi lại API danh sách mỗi 10 giây | sau ~1–10 giây | so `snippet` / `updated_at` |
+| 3 | MutationObserver trên danh sách | ngay khi dòng đổi | so nội dung từng dòng |
+
+Trong bảng có dòng trạng thái và nút **🔍 chẩn đoán**:
+
+```
+WS 1 socket · 118 khung · 8 tin · API 12 · Tên 300 · Dòng 31
+```
+
+- `WS 0 socket` → trang không tạo socket Facebook trong phiên đó (vẫn có tin qua đường 2–3)
+- `hook websocket: THẤT BẠI` → có script khác chặn, xem `lỗi gần nhất`
+- **🧪** = bắn tin thử để kiểm tra bảng có hoạt động không
 
 | Việc | Cách làm |
 |---|---|
-| Biết tin trước | đọc khung websocket `wss://edge-chat.facebook.com/chat` (`deleteThenInsertThread`) |
-| Tên khách | psid ghép với tên trong API danh sách (`<page_id>_<psid>`, 1175/1177 khớp trong HAR) |
-| Nội dung | chính đoạn `snippet` trong khung (đã bỏ escape `\uXXXX`) |
-| Vị trí | dòng đang có trong danh sách → `dòng 3 → #1`; chưa có → `dòng mới #1` |
-| Ảnh đại diện | URL `scontent…` trong khung |
-| Nguồn quảng cáo | nhãn `ad_id.<số>` trong khung → hiện `🔥 quảng cáo` |
-| Không đoán | khung gộp **nhiều hơn 1 psid** → bỏ; không có nội dung → bỏ |
-| Tin của shop | `Bạn:` / `Bạn đã gửi…` → mặc định bỏ (nút **chỉ tin tới**) |
-
-Bảng radar nằm góc phải dưới (nút **📨**), bấm vào một dòng để nhảy tới hội thoại đó.
-Thông báo hệ thống: bấm **🔔** (xin quyền một lần).
+| Tên khách | psid ghép với API danh sách, thiếu thì lấy tên trên dòng chat |
+| Nội dung | `snippet` trong khung (bỏ escape `\uXXXX`) |
+| Vị trí | dòng đang có → `dòng 3 → #1`; chưa có → `dòng mới #1` |
+| Nguồn quảng cáo | nhãn `ad_id.<số>` trong khung → `🔥 quảng cáo` |
+| Không đoán | khung gộp nhiều psid → bỏ; tin của shop (`Bạn:`) → bỏ (nút “chỉ tin tới”) |
 
 ```js
-__radar.debug()                     // trạng thái
-__radar.set({on:false})             // tắt radar
-__radar.set({onlyIncoming:false})   // báo cả tin của shop
-__radar.clear()                     // xoá danh sách
-__radar.feed('<base64 khung thật>') // nạp khung để thử
+__radar.debug()                     // trạng thái + diag
+__radar.set({on:false})             // tắt
+__radar.set({onlyIncoming:false})   // báo cả tin shop
+__radar.set({watchList:false, watchDom:false})  // chỉ dùng websocket
+__radar.clear() · __radar.scan() · __radar.feed('<base64>')
 ```
 
-Kiểm thử: `NODE_PATH=… node tools/test_radar.js` (26 mục, dùng khung thật trong
-`demo/ws_frames.json`). Xem thử giao diện: `demo/mock_radar.html`.
+Kiểm thử: `node tools/test_radar.js` (28 mục, dùng khung thật `demo/ws_frames.json`, kiểm cả 3 đường).
+Xem thử: `demo/mock_radar.html`.
