@@ -70,10 +70,16 @@ window.__convs = [
     snippet: 'Ib mình mẫu này', updated_at: '2026-10-31T02:10:00Z',
     last_sent_by: { id: ${JSON.stringify(PAGE)}, name: 'Huyền Nguyễn Shop' } }
 ];
-window.fetch = function (input) {
+window.__listUrls = [];
+window.fetch = function (input, init) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
-  if (/\\/conversations(\\?|$)/.test(url) && !/\\/messages/.test(url)) window.__listCalls++;
-  const body = { success: true, conversations: window.__convs };
+  const path = url.split('?')[0];
+  const isList = url.indexOf('/messages') < 0 && path.indexOf('/api/v1/') >= 0 && path.endsWith('/conversations');
+  if (isList) {
+    window.__listCalls++;
+    window.__listUrls.push(((init && init.method) || 'GET') + ' ' + url);
+  }
+  const body = { success: true, conversations: window.__convs, pages_with_current_count: {} };
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body), clone() { return this; } });
 };
 /** khung insertMessage tổng hợp (cùng dạng với khung thật, không phải lắt léo escape)
@@ -208,6 +214,27 @@ const diag = () => window.__radar.debug().diag;
   check(box && box.classList.contains('open'), 'nút 🔍 mở bảng chẩn đoán');
   check(box && /bỏ vì là tin shop/.test(box.textContent), 'chẩn đoán ghi số tin shop đã bỏ');
   check(box && /cấp tin nhắn/.test(box.textContent), 'chẩn đoán phân loại khung cấp tin nhắn');
+
+  // ---- 11. endpoint THẬT của app: POST /api/v1/conversations (tinnhanmoi.har)
+  const fd = new window.FormData();
+  fd.append('type', 'ALL,UNREAD');
+  window.fetch('/api/v1/conversations?pages[' + PAGE + ']=0&unread_first=true&mode=OR', { method: 'POST', body: fd });
+  await sleep(300);
+  const lastUrl = window.__listUrls[window.__listUrls.length - 1] || '';
+  check(/^POST \/api\/v1\/conversations/.test(lastUrl), 'bắt được endpoint thật POST /api/v1/conversations (' + lastUrl.slice(0, 42) + '…)');
+  const cap = window.__radar.poll();
+  check(!!cap && cap.method === 'POST' && cap.hasBody === true, 'ghi nhớ request để tự gọi lại (POST + body)');
+  await sleep(300);
+  check(window.__radar.debug().diag.listReq >= 1, 'chẩn đoán đếm được request danh sách');
+
+  // đổi nội dung -> tự gọi lại -> phải báo
+  const beforePoll = items().length;
+  window.__convs[0].snippet = 'Shop ơi còn màu đen không';
+  window.__convs[0].updated_at = '2026-10-31T04:00:00Z';
+  window.__convs[0].last_sent_by = { id: '100061610676863', name: 'Khách Khác' };
+  window.__radar.poll();
+  await sleep(400);
+  check(items().length === beforePoll + 1, 'tự gọi lại danh sách và báo tin khách mới');
 
   // ---- 10. tổng hợp
   check(diag().msgFrames >= 3, 'đếm được khung cấp tin nhắn (' + diag().msgFrames + ')');

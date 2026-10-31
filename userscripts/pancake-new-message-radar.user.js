@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pancake - Radar tin nhắn TỚI (chỉ tin khách gửi đến)
 // @namespace    https://github.com/chongoan4444/TEST1
-// @version      1.3.0
+// @version      1.4.0
 // @description  Báo tin KHÁCH GỬI TỚI (không báo tin shop gửi đi): tên khách + nội dung + vị trí dòng. Chiều tin lấy từ sender id trong khung websocket và last_sent_by trong API danh sách — dữ liệu thật, không đoán theo chữ "Bạn:".
 // @author       Arena Agent
 // @match        https://pancake.vn/*
@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
 
   const DEFAULTS = {
     on: true,
@@ -40,7 +40,7 @@
     allowUnknown: false,     // false = không báo tin không xác định được chiều
     max: 8,
     notify: false,
-    pollMs: 10000,           // tự gọi lại danh sách (chỉ khi tab đang xem)
+    pollMs: 8000,            // tự gọi lại danh sách (chỉ khi tab đang xem)
     watchList: true,         // dự phòng bằng API danh sách (chiều chính xác)
     watchDom: false          // theo dõi giao diện: KHÔNG biết chiều -> mặc định tắt
   };
@@ -68,12 +68,20 @@
     panel: null,
     fab: null,
     diagOpen: false,
+    log: [],
     diag: {
-      hook: false, hookErr: '', sockets: [], frames: 0,
+      hook: false, hookErr: '', sockets: [], frames: 0, listReq: 0, polls: 0, lastPollAt: 0, bodyReady: false,
       msgFrames: 0, threadFrames: 0, parsed: 0,
       skippedOut: 0, skippedUnknown: 0, lastFrameAt: 0, lastErr: '', lastSender: ''
     }
   };
+
+  /** nhật ký ngắn để nhìn thấy script đang làm gì (hiện trong bảng 🔍) */
+  function logEvent(tag, text) {
+    state.log.unshift({ t: Date.now(), tag: tag, text: String(text == null ? '' : text).slice(0, 160) });
+    if (state.log.length > 40) state.log.length = 40;
+    if (state.diagOpen) render();
+  }
 
   const LOG = (...a) => { try { console.log('%c[radar]', 'color:#0ea5e9;font-weight:600', ...a); } catch (e) { /* ignore */ } };
 
@@ -214,8 +222,16 @@
   /** quyết định có báo hay không, dựa đúng vào chiều tin */
   function route(hit, via) {
     if (CFG.onlyIncoming) {
-      if (hit.dirKnown && hit.outgoing) { state.diag.skippedOut++; return; }
-      if (!hit.dirKnown && !CFG.allowUnknown) { state.diag.skippedUnknown++; return; }
+      if (hit.dirKnown && hit.outgoing) {
+        state.diag.skippedOut++;
+        logEvent('⏭', 'bỏ tin shop · ' + String(hit.snippet || '').slice(0, 70));
+        return;
+      }
+      if (!hit.dirKnown && !CFG.allowUnknown) {
+        state.diag.skippedUnknown++;
+        logEvent('❔', 'bỏ vì chưa rõ chiều · ' + String(hit.snippet || '').slice(0, 70));
+        return;
+      }
     }
     if (via === 'websocket') state.wsHits++;
     if (via === 'giao diện') state.domHits++;
@@ -251,9 +267,17 @@
   // ======================================================================
   // 3. API DANH SÁCH — chiều tin lấy từ last_sent_by
   // ======================================================================
+  /**
+   * Hai kiểu endpoint danh sách có thật trong dữ liệu:
+   *   POST /api/v1/conversations?pages[..]=0&…&unread_first=true&mode=OR&tags=[…]   (tinnhanmoi.har)
+   *   GET  /api/v1/pages/<page_id>/conversations?current_count=40&next_cursor=…      (loaddanhsach.har)
+   */
   function isListUrl(url) {
-    const u = String(url || '').split('#')[0];
-    return /\/api\/v1\/pages\/[^/]+\/conversations(\?|$)/.test(u) && !/\/messages/.test(u);
+    const u = String(url || '').split('#')[0].split('?')[0];
+    if (/\/messages/.test(u)) return false;
+    if (/\/api\/v1\/conversations\/?$/.test(u)) return true;
+    if (/\/api\/v1\/pages\/[^/]+\/conversations\/?$/.test(u)) return true;
+    return false;
   }
 
   function ingestList(json) {
@@ -261,6 +285,7 @@
     const arr = json.conversations || json.data || [];
     if (!Array.isArray(arr) || !arr.length) return;
     state.listHits++;
+    logEvent('🔄', 'danh sách: ' + arr.length + ' hội thoại');
     const fresh = [];
     arr.forEach(cv => {
       if (!cv || typeof cv !== 'object') return;
@@ -294,14 +319,44 @@
     render();
   }
 
+  function captureListReq(url, method, init, input) {
+    const rec = {
+      url: url,
+      method: String(method || 'GET').toUpperCase(),
+      headers: (init && init.headers) || null,
+      body: null,
+      at: Date.now()
+    };
+    try {
+      if (init && init.body != null) {
+        const b = init.body;
+        const ok = typeof b === 'string' ||
+          (typeof URLSearchParams !== 'undefined' && b instanceof URLSearchParams) ||
+          (typeof FormData !== 'undefined' && b instanceof FormData) ||
+          (typeof Blob !== 'undefined' && b instanceof Blob);
+        if (ok) rec.body = b;              // FormData / chuỗi dùng lại nhiều lần được
+      } else if (input && typeof input === 'object' && typeof input.clone === 'function' && rec.method !== 'GET' && rec.method !== 'HEAD') {
+        const c = input.clone();
+        let ct = '';
+        try { ct = String((input.headers && input.headers.get && input.headers.get('content-type')) || ''); } catch (e) { /* ignore */ }
+        if (/multipart\/form-data/.test(ct)) c.formData().then(fd => { rec.body = fd; state.diag.bodyReady = true; }).catch(() => {});
+        else c.text().then(t => { rec.body = t; state.diag.bodyReady = true; }).catch(() => {});
+      }
+    } catch (e) { state.diag.lastErr = 'capture: ' + e.message; }
+    state.listReq = rec;
+    state.diag.listReq = (state.diag.listReq || 0) + 1;
+    render();
+  }
+
   const _fetch = window.fetch;
   if (typeof _fetch === 'function') {
     window.fetch = function (input, init) {
       const url = typeof input === 'string' ? input : ((input && input.url) || '');
+      let method = (init && init.method) || (input && input.method) || 'GET';
+      try { if (isListUrl(url)) captureListReq(url, method, init, input); } catch (e) { /* ignore */ }
       const p = _fetch.apply(this, arguments);
       try {
         if (isListUrl(url)) {
-          try { state.listReq = { url: url, init: init || null }; } catch (e) { /* ignore */ }
           p.then(r => { let c; try { c = r.clone(); } catch (e) { return; } c.json().then(j => ingestList(j)).catch(() => {}); }).catch(() => {});
         }
       } catch (e) { /* ignore */ }
@@ -321,11 +376,42 @@
     return _send.apply(this, arguments);
   };
 
+  /** bỏ content-type khi gửi lại FormData (boundary do trình duyệt tự sinh) */
+  function safeHeaders(h, body) {
+    if (!h) return null;
+    try {
+      const isFD = typeof FormData !== 'undefined' && body instanceof FormData;
+      const drop = k => isFD && String(k).toLowerCase() === 'content-type';
+      if (typeof Headers !== 'undefined' && h instanceof Headers) {
+        const out = new Headers();
+        h.forEach((v, k) => { if (!drop(k)) out.set(k, v); });
+        return out;
+      }
+      if (Array.isArray(h)) return h.filter(pair => !drop(pair[0]));
+      if (typeof h === 'object') {
+        const out = {};
+        Object.keys(h).forEach(k => { if (!drop(k)) out[k] = h[k]; });
+        return out;
+      }
+    } catch (e) { /* ignore */ }
+    return h;
+  }
+
   function pollList() {
-    if (!CFG.on || !CFG.watchList || !state.listReq) return;
+    const r = state.listReq;
+    if (!CFG.on || !CFG.watchList || !r) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    try { fetch(state.listReq.url, state.listReq.init ? { method: 'POST', credentials: 'include' } : { method: 'GET', credentials: 'include' }).catch(() => {}); }
-    catch (e) { /* ignore */ }
+    if (Date.now() - (r.lastPoll || 0) < Math.max(3000, Number(CFG.pollMs) || 10000)) return;
+    r.lastPoll = Date.now();
+    const opt = { method: r.method, credentials: 'include' };
+    const h = safeHeaders(r.headers, r.body);
+    if (h) opt.headers = h;
+    if (r.body != null) opt.body = r.body;
+    try {
+      fetch(r.url, opt)
+        .then(() => { state.diag.lastPollAt = Date.now(); state.diag.polls = (state.diag.polls || 0) + 1; })
+        .catch(err => logEvent('⚠️', 'gọi danh sách lỗi: ' + err.message));
+    } catch (e) { logEvent('⚠️', 'gọi danh sách lỗi: ' + e.message); }
   }
 
   // ======================================================================
@@ -437,6 +523,7 @@
     state.items.unshift(item);
     if (state.items.length > 40) state.items.length = 40;
     render();
+    logEvent('📥', (item.name || hit.psid) + ' · ' + item.snippet.slice(0, 70));
     notify(item);
     LOG('tin tới:', item.name || hit.psid, '·', item.snippet.slice(0, 50), '·', via, '· vị trí', pos.pos || 'mới');
   }
@@ -531,9 +618,11 @@
     p.classList.toggle('off', !CFG.panel);
 
     const d = state.diag;
-    const stat = (d.hook ? 'WS ' + d.sockets.length + ' socket · ' + d.msgFrames + ' tin / ' + d.threadFrames + ' hội thoại' : 'WS CHƯA TREO ĐƯỢC HOOK') +
+    const lastAt = d.lastPollAt || (state.listReq && state.listReq.at) || 0;
+    const stat = (d.hook ? 'WS ' + d.sockets.length + ' socket · ' + d.msgFrames + ' tin' : 'WS chưa treo được hook') +
+      ' · DS ' + state.listHits + ' lần' + (lastAt ? ' (' + timeStr(lastAt) + ')' : '') +
       ' · bỏ ' + d.skippedOut + ' tin shop' + (d.skippedUnknown ? ' · ' + d.skippedUnknown + ' chưa rõ chiều' : '') +
-      ' · API ' + state.listHits + ' · Tên ' + state.people.size;
+      ' · Tên ' + state.people.size;
 
     const head = '<div class="__rd_head">' +
       '<div class="__rd_hrow"><b>📨 Tin khách gửi tới</b><span class="sp"></span>' +
@@ -604,6 +693,7 @@
 
   function diagText() {
     const d = state.diag;
+    const logs = state.log.slice(0, 12).map(e => timeStr(e.t) + ' ' + e.tag + ' ' + e.text);
     return [
       'phiên bản: ' + VERSION,
       'trang: ' + location.href.slice(0, 120),
@@ -614,7 +704,11 @@
       'lần cuối có tin: ' + (d.lastFrameAt ? new Date(d.lastFrameAt).toLocaleTimeString() : '—') + ' · sender cuối: ' + (d.lastSender || '—'),
       'API danh sách: ' + state.listHits + ' lần · tên đã biết: ' + state.people.size,
       'dòng trong danh sách: ' + rows().length,
-      'lỗi gần nhất: ' + (d.lastErr || '—')
+      'request danh sách: ' + d.listReq + ' lần · tự gọi lại: ' + (d.polls || 0) + ' lần · lần cuối: ' + (d.lastPollAt ? new Date(d.lastPollAt).toLocaleTimeString() : '—'),
+      'lỗi gần nhất: ' + (d.lastErr || '—'),
+      '',
+      'NHẬT KÝ (mới nhất ở trên):',
+      (logs.length ? logs.join('\n') : '  (chưa có hoạt động)')
     ].join('\n');
   }
 
@@ -649,6 +743,13 @@
     set(patch) { Object.assign(CFG, patch); save(); render(); return CFG; },
     clear() { state.items = []; render(); },
     scan: () => { scanDom(); render(); return state.domHits; },
+    /** gọi lại danh sách ngay (dùng cho kiểm thử / khi cần làm mới) */
+    poll: () => {
+      if (!state.listReq) return null;
+      state.listReq.lastPoll = 0;
+      pollList();
+      return { url: state.listReq.url, method: state.listReq.method, hasBody: state.listReq.body != null };
+    },
     feed(b64) { try { readWsData(typeof b64 === 'string' ? atob(b64) : b64); } catch (e) { state.diag.lastErr = 'feed: ' + e.message; return false; } return true; },
     help() {
       console.log('%c[radar] cách dùng', 'color:#0ea5e9;font-weight:600');

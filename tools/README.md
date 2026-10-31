@@ -358,43 +358,55 @@ Nếu websocket không có (mạng chặn, FB đổi định dạng) thì mọi 
 
 ## 📨 Radar tin nhắn TỚI — script riêng (`userscripts/pancake-new-message-radar.user.js`)
 
-Báo **tin khách gửi đến** (không báo tin shop gửi đi): tên khách · nội dung · vị trí dòng.
+Báo **tin khách gửi đến**: tên khách · nội dung · vị trí dòng. Bản **1.4.0**.
 
-### Căn cứ xác định CHIỀU tin (kiểm trên `batmesss.har`)
+### Endpoint danh sách THẬT (lý do bản 1.3.0 “không hoạt động”)
 
-| Nguồn | Trường dùng | Kết luận |
+| Bản ghi | Request | Ghi chú |
 |---|---|---|
-| Khung websocket cấp tin nhắn (`insertMessage`) | `…,"<mid.…>","<id số>",[19,"<SENDER ID>"]` | `SENDER ID = psid khách` → tin tới · `= page id` → tin shop |
-| API danh sách | `last_sent_by` là **object** `{id, name, …}` | `id = from_psid` → tin tới · `id = page_id` → tin shop |
-| Khung cấp hội thoại (`deleteThenInsertThread`) | chỉ có nội dung, **không** có sender | **chưa rõ chiều** → mặc định KHÔNG báo |
-| Giao diện | không có trường chiều | mặc định TẮT (`watchDom:false`) |
+| `tinnhanmoi.har` | `POST /api/v1/conversations?pages[…]=0&unread_first=true&mode=OR&tags=[…]` (body multipart `type=ALL,UNREAD`) | app hiện tại dùng cái này |
+| `loaddanhsach.har` | `GET /api/v1/pages/<page_id>/conversations?current_count=40&next_cursor=…` | khi cuộn danh sách |
 
-Đo trên 8 khung `insertMessage` của HAR: **1 tin của khách** (sender `61594409994701` = psid)
-và **7 tin của shop** (sender `834072796450267` = page id) — khớp đúng 8/8.
+Bản 1.3.0 chỉ nghe `/api/v1/pages/<id>/conversations` → **bỏ lỡ hoàn toàn** request
+`POST /api/v1/conversations`. Cùng lúc đó, trong `tinnhanmoi.har` (59 khung websocket)
+**không có khung `insertMessage` nào** — nên cả hai đường đều im lặng.
 
-> Bản 1.1.0 đoán chiều theo chữ **“Bạn:”** trong đoạn tin — sai ngay khi giao diện đổi ngôn ngữ
-> hoặc khi Pancake cắt mất tiền tố, nên báo lẫn tin gửi đi. Bản 1.3.0 bỏ cách đó.
+Từ 1.4.0: nghe cả hai endpoint, ghi nhớ **url + method + body** rồi tự gọi lại mỗi 8 giây
+(chỉ khi tab đang xem), so `snippet` / `updated_at` để phát hiện tin mới.
 
-### Bảng radar
+### Xác định CHIỀU tin
 
-Dòng trạng thái: `WS 1 socket · 12 tin / 8 hội thoại · bỏ 7 tin shop · 3 chưa rõ chiều · API 12 · Tên 300`
+| Nguồn | Trường | Kết luận |
+|---|---|---|
+| Khung `insertMessage` | `…,"<mid.…>","<id>",[19,"<SENDER ID>"]` | `= psid` → tin khách · `= page id` → tin shop |
+| API danh sách | `last_sent_by` (object) | `id = from_psid` → tin khách · `id = page_id` → tin shop |
+| Khung `deleteThenInsertThread` | không có sender | chưa rõ chiều → **không báo** |
+| Giao diện | không có trường chiều (snippet Pancake **không** có tiền tố “Bạn:”) | mặc định tắt |
+
+### Nhật ký trong bảng (nút 🔍)
+
+```
+10:22:41 📥 Ngọc Ánh · Còn size M không shop
+10:22:38 ⏭ bỏ tin shop · Dạ em gửi bảng size ngay ạ
+10:22:20 🔄 danh sách: 20 hội thoại
+```
+
+Dòng trạng thái: `WS 1 socket · 12 tin · DS 6 lần (10:22:30) · bỏ 7 tin shop · Tên 300`
 
 | Nút | Việc |
 |---|---|
 | 📨 | ẩn/hiện bảng |
-| **chỉ tin tới** | bật/tắt lọc (tắt để xem cả tin shop khi đối chiếu) |
+| chỉ tin tới | lọc tin khách (tắt để xem cả tin shop) |
 | 🔔 | thông báo hệ thống |
-| 🧪 | bắn tin thử để kiểm tra bảng |
-| 🔍 | mở bảng chẩn đoán (số khung, sender cuối, số tin bị bỏ…) |
+| 🧪 | tin thử |
+| 🔍 | chẩn đoán + nhật ký |
 | 🧹 | xoá danh sách |
 
 ```js
-__radar.debug()                      // trạng thái + chẩn đoán
-__radar.set({onlyIncoming:false})    // hiện cả tin shop
-__radar.set({allowUnknown:true})     // cho báo cả tin chưa rõ chiều (mặc định tắt)
-__radar.set({on:false})              // tắt radar
+__radar.debug()      // trạng thái + diag
+__radar.poll()       // gọi lại danh sách ngay
+__radar.set({pollMs:5000})   // nhanh hơn (mặc định 8000)
 ```
 
-Kiểm thử: `node tools/test_radar.js` — 28 mục, dùng khung thật #28 (khách), #37 (shop),
-#33 (hội thoại), #88 (gộp) trong `demo/ws_frames.json`.
-Xem thử: `demo/mock_radar.html` (nút “Shop trả lời” phải **không** hiện tin).
+Kiểm thử: `node tools/test_radar.js` — 33 mục (khung thật #28 khách / #37 shop / #33 hội thoại /
+#88 gộp, endpoint thật `POST /api/v1/conversations`, tự gọi lại và phát hiện tin mới).

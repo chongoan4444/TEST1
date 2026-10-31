@@ -93,10 +93,12 @@ const convs = PEOPLE.map((p, i) => ({
   last_sent_by: { id: p.psid, name: p.name }
 }));
 const realFetch = (typeof window.fetch === 'function') ? window.fetch.bind(window) : null;
-window.fetch = function (input) {
+window.fetch = function (input, init) {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
-  if (!/\/conversations(\?|$)/.test(url)) return realFetch ? realFetch(input) : Promise.reject(new Error('no fetch'));
-  const body = { success: true, conversations: convs };
+  const path = url.split('?')[0];
+  const isList = url.indexOf('/messages') < 0 && path.indexOf('/api/v1/') >= 0 && path.endsWith('/conversations');
+  if (!isList) return realFetch ? realFetch(input) : Promise.reject(new Error('no fetch'));
+  const body = { success: true, conversations: convs, pages_with_current_count: {} };
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body), clone() { return this; } });
 };
 </script>
@@ -108,7 +110,12 @@ window.fetch = function (input) {
 window.__ws = new WebSocket('wss://edge-chat.facebook.com/chat?demo=1');
 
 // ---------------------------------------------------------------- nạp danh sách để radar biết TÊN
-try { fetch('/api/v1/pages/' + PAGE + '/conversations?unread_first=true&mode=OR', { method: 'POST' }); } catch (e) { /* demo ngoài trình duyệt */ }
+// đúng endpoint thật của app: POST /api/v1/conversations (multipart body)
+try {
+  const fd = new FormData();
+  fd.append('type', 'ALL,UNREAD');
+  fetch('/api/v1/conversations?pages[' + PAGE + ']=0&unread_first=true&mode=OR', { method: 'POST', body: fd });
+} catch (e) { /* demo ngoài trình duyệt */ }
 
 /** khung insertMessage đúng dạng thật: có psid hội thoại + SENDER ID quyết định chiều tin */
 function frame(psid, text, fromCustomer) {
